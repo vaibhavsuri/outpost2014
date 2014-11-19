@@ -24,6 +24,8 @@ public class Player extends outpost.sim.Player {
 	Set<Integer> waterSafers = new HashSet<Integer>();
 	int safeWaterSupply = 0;
 
+	int nextNewTheta = 5;
+
 
 	public Player(int id_in) {
 		super(id_in);
@@ -59,10 +61,11 @@ public class Player extends outpost.sim.Player {
 		}
 
 		tickCounter++;
-		if (tickCounter % 5 == 0) {
+		if (tickCounter % nextNewTheta == 0) {
 			for (int i = 0; i < 100; i++) {
 				theta[i] = random.nextInt(4);
 			}
+			nextNewTheta = random.nextInt(50);
 		}
 		
 		playersOutposts = king_outpostlist;
@@ -111,7 +114,7 @@ public class Player extends outpost.sim.Player {
 			}
 			
 			int requiredWaterForNextSeason = (myOutposts.size() - 1) * W_PARAM;
-			if (awayFromOthers && waterCounter + safeWaterSupply > requiredWaterForNextSeason) {
+			if (awayFromOthers && waterCounter > RADIUS * 2) {
 				waterSafers.add(new Integer(j));
 				safeWaterSupply += waterCounter;
 				
