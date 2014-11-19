@@ -1,4 +1,4 @@
-package outpost.group9;
+package outpost.fastdumb;
 
 import java.util.*;
 
@@ -19,10 +19,9 @@ public class Player extends outpost.sim.Player {
 	
 	Random random = new Random();
 	int[] theta = new int[100];
-	int tickCounter = 0;
+	int seasonCounter = 0;
 	
-	Set<Integer> waterSafers = new HashSet<Integer>();
-	int safeWaterSupply = 0;
+	int nextIdToBeFixed = 0;
 
 
 	public Player(int id_in) {
@@ -35,12 +34,8 @@ public class Player extends outpost.sim.Player {
 		}
 	}
 
-	public int delete(ArrayList<ArrayList<Pair>> king_outpostlist, Point[] gridin) {
-		for (int i = 0; i < king_outpostlist.size(); i++) {
-			if (!waterSafers.contains(new Integer(i))) {
-				return i;
-			}
-		}
+	public int delete(ArrayList<ArrayList<Pair>> king_outpostlist,
+			Point[] gridin) {
 		int del = random.nextInt(king_outpostlist.get(id).size());
 		return del;
 	}
@@ -58,8 +53,8 @@ public class Player extends outpost.sim.Player {
 			playerInitialized = true;
 		}
 
-		tickCounter++;
-		if (tickCounter % 5 == 0) {
+		seasonCounter++;
+		if (seasonCounter % 10 == 0) {
 			for (int i = 0; i < 100; i++) {
 				theta[i] = random.nextInt(4);
 			}
@@ -69,82 +64,36 @@ public class Player extends outpost.sim.Player {
 		for (int i = 0; i < SIDE_SIZE * SIDE_SIZE; i++) {
 			grid[i].ownerlist.clear();
 		}
+
 		
+
 		
 		ArrayList<Pair> myOutposts = king_outpostlist.get(this.id);
-		int id = 0;
-		for (Pair thisOutpost : myOutposts) {
-			System.out.printf("Outpost %d: %d,%d\n", id, thisOutpost.x, thisOutpost.y);
-			id++;
-		}
+//		int id = 0;
+//		for (Pair thisOutpost : myOutposts) {
+//			System.out.printf("Outpost %d: %d,%d\n", id, thisOutpost.x, thisOutpost.y);
+//			id++;
+//		}
 		
 		ArrayList<movePair> movelist = new ArrayList<movePair>();
 
-		for (int j = 0; j < myOutposts.size(); j++) {
-			if (waterSafers.contains(new Integer(j))) {
-				continue;
-			}
-			
-			Pair movingOutpost = myOutposts.get(j);
-			boolean awayFromOthers = true;
-			for (Integer safers : waterSafers) {
-				Pair saferOutpost = myOutposts.get(safers);
-				double dist = distance(saferOutpost, movingOutpost);
-				if(dist < RADIUS) {
-					awayFromOthers = false;
-					break;
-				}
-			}
-			
-			int waterCounter = 0;
-			for(int x = Math.max(0, movingOutpost.x - RADIUS - 1); x < Math.min(SIDE_SIZE, movingOutpost.x + RADIUS + 1); x++) {
-				for(int y = Math.max(0, movingOutpost.y - RADIUS - 1); y < Math.min(SIDE_SIZE, movingOutpost.y + RADIUS + 1); y++) {
-					double dist = distance(getGridPoint(x, y), movingOutpost);
-					if (dist > RADIUS) {
-						continue;
-					}
-					
-					if (getGridPoint(x, y).water && getGridPoint(x, y).ownerlist.size() == 0) {
-						waterCounter++;
+		for (int j = nextIdToBeFixed; j < myOutposts.size(); j++) {
+			ArrayList<Pair> positions = new ArrayList<Pair>();
+			positions = possibleFuturePositions(myOutposts.get(j));
+			boolean gotit = false;
+			while (!gotit) {
+				if (theta[j] < positions.size()) {
+					if (isPairValidPosition(positions.get(theta[j]))) {
+						movePair next = new movePair(j, positions.get(theta[j]));
+						movelist.add(next);
+						gotit = true;
+						break;
 					}
 				}
-			}
-			
-			int requiredWaterForNextSeason = (myOutposts.size() - 1) * W_PARAM;
-			if (awayFromOthers && waterCounter + safeWaterSupply > requiredWaterForNextSeason) {
-				waterSafers.add(new Integer(j));
-				safeWaterSupply += waterCounter;
-				
-				for(int x = Math.max(0, movingOutpost.x - RADIUS - 1); x < Math.min(SIDE_SIZE, movingOutpost.x + RADIUS + 1); x++) {
-					for(int y = Math.max(0, movingOutpost.y - RADIUS - 1); y < Math.min(SIDE_SIZE, movingOutpost.y + RADIUS + 1); y++) {
-						double dist = distance(getGridPoint(x, y), movingOutpost);
-						if (dist > RADIUS) {
-							continue;
-						}
-						
-						if (getGridPoint(x, y).water) {
-							getGridPoint(x, y).ownerlist.add(movingOutpost);
-						}
-					}
-				}
-			} else {
-				ArrayList<Pair> positions = new ArrayList<Pair>();
-				positions = possibleFuturePositions(myOutposts.get(j));
-				boolean gotit = false;
-				while (!gotit) {
-					if (theta[j] < positions.size()) {
-						if (isPairValidPosition(positions.get(theta[j]))) {
-							movePair next = new movePair(j, positions.get(theta[j]));
-							movelist.add(next);
-							gotit = true;
-							break;
-						}
-					}
-					theta[j] = random.nextInt(positions.size());
-				}
+				theta[j] = random.nextInt(positions.size());
 			}
 		}
-		
+
 		return movelist;
 	}
 	
@@ -202,7 +151,6 @@ public class Player extends outpost.sim.Player {
 	}
 	
 	boolean isPairValidPosition(Pair pr) {
-//		System.out.printf("Pair: %d,%d\n", pr.x, pr.y);
 		if (pr.x < 0 || pr.x >= SIDE_SIZE) {
 			return false;
 		}
