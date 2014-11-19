@@ -31,7 +31,7 @@ public class Player extends outpost.sim.Player {
 		return del;
 	}
 
-	public ArrayList<movePair> move(ArrayList<ArrayList<Pair>> king_outpostlist, Point[] gridin) {
+	public ArrayList<movePair> move(ArrayList<ArrayList<Pair>> king_outpostlist, Point[] gridin, int r, int L, int W, int T) {
 		if (!playerInitialized) {
 			for (int i = 0; i < gridin.length; i++) {
 				grid[i] = new Point(gridin[i]);
@@ -62,10 +62,9 @@ public class Player extends outpost.sim.Player {
 		ArrayList<movePair> movelist = new ArrayList<movePair>();
 
 
-		
 		for (int j = 0; j < myOutposts.size() - 1; j++) {
 			ArrayList<Pair> positions = new ArrayList<Pair>();
-			positions = surround(myOutposts.get(j));
+			positions = possibleFuturePositions(myOutposts.get(j));
 			boolean gotit = false;
 			while (!gotit) {
 				if (theta[j] < positions.size()) {
@@ -76,80 +75,35 @@ public class Player extends outpost.sim.Player {
 						break;
 					}
 				}
-				// System.out.println("we need to change the direction???");
 				theta[j] = random.nextInt(positions.size());
 			}
 		}
 
-		/*
-		 * if (prarr.size()>noutpost) { movePair mpr = new
-		 * movePair(prarr.size()-1, new Pair(0,0)); nextlist.add(mpr);
-		 * //mpr.printmovePair(); }
-		 */
-		// else {
 		ArrayList<Pair> positions = new ArrayList<Pair>();
-		positions = surround(myOutposts.get(myOutposts.size() - 1));
+		positions = possibleFuturePositions(myOutposts.get(myOutposts.size() - 1));
 		boolean gotit = false;
 		while (!gotit) {
-			// Random random = new Random();
-			// int theta = random.nextInt(positions.size());
-			// System.out.println("we are here!!!");
 			if (theta[0] < positions.size()) {
 				if (isPairValidPosition(positions.get(theta[0]))) {
 					movePair next = new movePair(myOutposts.size() - 1, positions.get(theta[0]));
 					movelist.add(next);
-					// next.printmovePair();
 					gotit = true;
 					break;
 				}
 			}
-			// System.out.println("outpost 0 need to change the direction???");
 			theta[0] = random.nextInt(positions.size());
 		}
-
-		// }
 
 		return movelist;
 
 	}
 
-	static ArrayList<Pair> surround(Pair start) {
-		// System.out.printf("start is (%d, %d)", start.x, start.y);
+	static ArrayList<Pair> possibleFuturePositions(Pair start) {
 		ArrayList<Pair> prlist = new ArrayList<Pair>();
-		for (int i = 0; i < 4; i++) {
-			Pair tmp0 = new Pair(start);
-			Pair tmp;
-			if (i == 0) {
-				// if (start.x>0) {
-				tmp = new Pair(tmp0.x - 1, tmp0.y);
-				// if (!PairtoPoint(tmp).water)
-				prlist.add(tmp);
-				// }
-			}
-			if (i == 1) {
-				// if (start.x<size-1) {
-				tmp = new Pair(tmp0.x + 1, tmp0.y);
-				// if (!PairtoPoint(tmp).water)
-				prlist.add(tmp);
-				// }
-			}
-			if (i == 2) {
-				// if (start.y>0) {
-				tmp = new Pair(tmp0.x, tmp0.y - 1);
-				// if (!PairtoPoint(tmp).water)
-				prlist.add(tmp);
-				// }
-			}
-			if (i == 3) {
-				// if (start.y<size-1) {
-				tmp = new Pair(tmp0.x, tmp0.y + 1);
-				// if (!PairtoPoint(tmp).water)
-				prlist.add(tmp);
-				// }
-			}
-
-		}
-
+		prlist.add(new Pair(start.x - 1, start.y));
+		prlist.add(new Pair(start.x + 1, start.y));
+		prlist.add(new Pair(start.x, start.y - 1));
+		prlist.add(new Pair(start.x, start.y + 1));
 		return prlist;
 	}
 	
