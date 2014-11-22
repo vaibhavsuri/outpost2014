@@ -11,7 +11,8 @@ public class Player extends outpost.sim.Player {
 
 	boolean playerInitialized;
 	Point[] grid = new Point[SIDE_SIZE * SIDE_SIZE];
-	ArrayList<ArrayList<Pair>> playersOutposts;
+	List<ArrayList<Pair>> playersOutposts;
+	List<Pair> playersBase = new ArrayList<>(Arrays.asList(new Pair(0,0), new Pair(99, 0), new Pair(99, 99), new Pair(0,99)));;
 	int RADIUS;
 	int L_PARAM;
 	int W_PARAM;
@@ -83,13 +84,53 @@ public class Player extends outpost.sim.Player {
 		
 		ArrayList<movePair> movelist = new ArrayList<movePair>();
 
-		for (int j = 0; j < myOutposts.size(); j++) {
-			movePair next = new movePair(j, pointToPair(nextPositionToGetToPosition(getGridPoint(myOutposts.get(j)), new Point(95,95,false))));
-			movelist.add(next);
+		for (int j = 0; j < myOutposts.size(); j+= 2) {
+			if(j+1 >= myOutposts.size()) {
+				// wait for follower
+				continue;
+			}
+			Point leader = getGridPoint(myOutposts.get(j));
+			Point follower = getGridPoint(myOutposts.get(j+1));
+			Point closestEnemy = getClosestEnemy(leader);
+			if (distance(closestEnemy, leader) != 1) {
+				movePair next = new movePair(j, pointToPair(nextPositionToGetToPosition(leader, closestEnemy)));
+				movelist.add(next);
+				movePair next2 = new movePair(j+1, pointToPair(nextPositionToGetToPosition(follower, leader)));
+				movelist.add(next2);
+			}
 		}
 		
 		return movelist;
 	}
+	
+	Point getClosestEnemy(Point p) {
+		int minDist = Integer.MAX_VALUE;
+		Pair minPair = null;
+		for(int i = 0; i < 4; i++) {
+			if (i == this.id) {
+				continue;
+			}
+			
+			for (Pair pr : playersOutposts.get(i)) {
+				int dist = distance(pr,p);
+				if (dist < minDist) {
+					minDist = dist;
+					minPair = pr;
+				}
+			}
+			
+			Pair pr = playersBase.get(i);
+			int dist = distance(pr,p);
+			if (dist < minDist) {
+				minDist = dist;
+				minPair = pr;
+			}
+		}
+		
+		
+		return getGridPoint(minPair);
+	}
+	
 	Point nextPositionToGetToPosition(Point source, Point destination) {
 		source = getGridPoint(source);
 		destination = getGridPoint(destination);
@@ -221,10 +262,10 @@ public class Player extends outpost.sim.Player {
 
 	Pair pointToPair(Point pt) { return new Pair(pt.x, pt.y); }
 	
-	double distance(Point a, Point b) {	return Math.abs(a.x-b.x)+Math.abs(a.y-b.y); }
-	double distance(Point a, Pair b) {	return Math.abs(a.x-b.x)+Math.abs(a.y-b.y); }
-	double distance(Pair a, Point b) {	return Math.abs(a.x-b.x)+Math.abs(a.y-b.y); }
-	double distance(Pair a, Pair b) {	return Math.abs(a.x-b.x)+Math.abs(a.y-b.y); }
+	int distance(Point a, Point b) {	return Math.abs(a.x-b.x)+Math.abs(a.y-b.y); }
+	int distance(Point a, Pair b) {	return Math.abs(a.x-b.x)+Math.abs(a.y-b.y); }
+	int distance(Pair a, Point b) {	return Math.abs(a.x-b.x)+Math.abs(a.y-b.y); }
+	int distance(Pair a, Pair b) {	return Math.abs(a.x-b.x)+Math.abs(a.y-b.y); }
 	
 	boolean equal(Pair a, Point b) { return a.x == b.x && a.y==b.y; }
 	boolean equal(Pair a, Pair b) { return a.x == b.x && a.y==b.y; }
