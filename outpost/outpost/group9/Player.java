@@ -51,12 +51,13 @@ public class Player extends outpost.sim.Player {
 		if (!playerInitialized) {
 			for (int i = 0; i < gridin.length; i++) {
 				grid[i] = new Point(gridin[i]);
-				RADIUS = r;
-				L_PARAM = L;
-				W_PARAM = W;
-				MAX_TICKS = T;
 			}
 
+			RADIUS = r;
+			L_PARAM = L;
+			W_PARAM = W;
+			MAX_TICKS = T;
+			
 			playerInitialized = true;
 		}
 
@@ -65,14 +66,13 @@ public class Player extends outpost.sim.Player {
 			for (int i = 0; i < 100; i++) {
 				theta[i] = random.nextInt(4);
 			}
-			nextNewTheta = random.nextInt(50);
+			nextNewTheta = random.nextInt(50)+1;
 		}
 		
 		playersOutposts = king_outpostlist;
 		for (int i = 0; i < SIDE_SIZE * SIDE_SIZE; i++) {
 			grid[i].ownerlist.clear();
 		}
-		
 		
 		ArrayList<Pair> myOutposts = king_outpostlist.get(this.id);
 		int id = 0;
@@ -84,135 +84,132 @@ public class Player extends outpost.sim.Player {
 		ArrayList<movePair> movelist = new ArrayList<movePair>();
 
 		for (int j = 0; j < myOutposts.size(); j++) {
-			if (waterSafers.contains(new Integer(j))) {
-				continue;
-			}
-			
-			Pair movingOutpost = myOutposts.get(j);
-			boolean awayFromOthers = true;
-			for (Integer safers : waterSafers) {
-				Pair saferOutpost = myOutposts.get(safers);
-				double dist = distance(saferOutpost, movingOutpost);
-				if(dist < RADIUS) {
-					awayFromOthers = false;
-					break;
-				}
-			}
-			
-			int waterCounter = 0;
-			for(int x = Math.max(0, movingOutpost.x - RADIUS - 1); x < Math.min(SIDE_SIZE, movingOutpost.x + RADIUS + 1); x++) {
-				for(int y = Math.max(0, movingOutpost.y - RADIUS - 1); y < Math.min(SIDE_SIZE, movingOutpost.y + RADIUS + 1); y++) {
-					double dist = distance(getGridPoint(x, y), movingOutpost);
-					if (dist > RADIUS) {
-						continue;
-					}
-					
-					if (getGridPoint(x, y).water && getGridPoint(x, y).ownerlist.size() == 0) {
-						waterCounter++;
-					}
-				}
-			}
-			
-			int requiredWaterForNextSeason = (myOutposts.size() - 1) * W_PARAM;
-			if (awayFromOthers && waterCounter > RADIUS * 2) {
-				waterSafers.add(new Integer(j));
-				safeWaterSupply += waterCounter;
-				
-				for(int x = Math.max(0, movingOutpost.x - RADIUS - 1); x < Math.min(SIDE_SIZE, movingOutpost.x + RADIUS + 1); x++) {
-					for(int y = Math.max(0, movingOutpost.y - RADIUS - 1); y < Math.min(SIDE_SIZE, movingOutpost.y + RADIUS + 1); y++) {
-						double dist = distance(getGridPoint(x, y), movingOutpost);
-						if (dist > RADIUS) {
-							continue;
-						}
-						
-						if (getGridPoint(x, y).water) {
-							getGridPoint(x, y).ownerlist.add(movingOutpost);
-						}
-					}
-				}
-			} else {
-				ArrayList<Pair> positions = new ArrayList<Pair>();
-				positions = possibleFuturePositions(myOutposts.get(j));
-				boolean gotit = false;
-				while (!gotit) {
-					if (theta[j] < positions.size()) {
-						if (isPairValidPosition(positions.get(theta[j]))) {
-							movePair next = new movePair(j, positions.get(theta[j]));
-							movelist.add(next);
-							gotit = true;
-							break;
-						}
-					}
-					theta[j] = random.nextInt(positions.size());
-				}
-			}
+			movePair next = new movePair(j, pointToPair(nextPositionToGetToPosition(getGridPoint(myOutposts.get(j)), new Point(95,95,false))));
+			movelist.add(next);
 		}
 		
 		return movelist;
 	}
-	
-	ArrayList<Resource> computeResources() {
-		return null;
+	Point nextPositionToGetToPosition(Point source, Point destination) {
+		source = getGridPoint(source);
+		destination = getGridPoint(destination);
+		if (source.equals(destination)) {
+			return destination;
+		}
+		
+		ArrayList<Point> path = buildPath(source, destination);
+		
+		System.out.printf("From %s to %s: move to %s\n", pointToString(source), pointToString(destination), pointToString(path.get(1)));
+		return path.get(1);
 	}
 	
-	Pair nextPositionToGetToPosition(Pair curr, Pair target) {
-		//TODO FIX will hit water
-		Pair nextPosition = null;
-		int xDiff = target.x - curr.x;
-		int yDiff = target.y - curr.y;
-		if (Math.abs(xDiff) > Math.abs(yDiff)) {
-			if (target.x > curr.x) {
-				nextPosition = new Pair(curr.x + 1, curr.y);
-			} else if (target.x < curr.x) {
-				nextPosition = new Pair(curr.x - 1, curr.y);
-			} else {
-				if (target.y > curr.y) {
-					nextPosition = new Pair(curr.x, curr.y + 1);
-				} else if (target.y < curr.y) {
-					nextPosition = new Pair(curr.x, curr.y - 1);
-				} else {
-					nextPosition = new Pair(curr.x, curr.y);
+	public ArrayList<Point> buildPath(Point source, Point destination) {
+		source = getGridPoint(source);
+		destination = getGridPoint(destination);
+		
+		HashMap<Point, Point> parent = new HashMap<Point, Point>();
+		ArrayList<Point> discover = new ArrayList<Point>();
+		Set<Point> visited = new HashSet<Point>();
+		discover.add(source);
+
+		while(true)
+		{
+			if(discover.size()!=0)
+			{
+				Point current = discover.remove(0);
+				
+//				System.out.println(this.id+" analyzing: "+current.x+" "+current.y);
+				visited.add(current);
+				
+				if (equal(current, destination))
+				{
+//					System.out.println("Found destination");
+					break;
+				}
+				
+				ArrayList<Point> validNeighbors = surrounds(current);
+				for (Point p: validNeighbors)
+				{
+					if (p.water) {
+						continue;
+					}
+					if (visited.contains(p)) {
+						continue;
+					}
+					if (discover.contains(p)) {
+						continue;
+					}
+					
+//					if(p.ownerlist.size() == 0 || p.ownerlist.get(0).x==this.id) 
+//					{
+//						continue;
+//					}
+					
+					discover.add(p);
+					parent.put(p, current);
 				}
 			}
-		} else {
-			if (target.y > curr.y) {
-				nextPosition = new Pair(curr.x, curr.y + 1);
-			} else if (target.y < curr.y) {
-				nextPosition = new Pair(curr.x, curr.y - 1);
-			} else {
-				if (target.x > curr.x) {
-					nextPosition = new Pair(curr.x + 1, curr.y);
-				} else if (target.x < curr.x) {
-					nextPosition = new Pair(curr.x - 1, curr.y);
-				} else {
-					nextPosition = new Pair(curr.x, curr.y);
-				}
+			else 
+			{
+				System.out.printf("No Path from %s to %s\n", pointToString(source), pointToString(destination));
+				return null;			
 			}
 		}
 		
-		System.out.printf("nextPosition %d,%d from %d,%d to %d,%d\n",nextPosition.x, nextPosition.y, curr.x,curr.y,target.x,target.y);
-		return nextPosition;
+		ArrayList<Point> path = new ArrayList<Point>();
+		Point p = destination;
+		while(true) {
+			path.add(p);
+			if (p.equals(source)) {
+				break;
+			}
+			p = parent.get(p);
+		}
+		Collections.reverse(path);
+		
+//		for (Point p2 : path) {
+//			System.out.println(pointToString(p2));
+//		}
+		
+		return path;
 	}
 	
 
-	ArrayList<Pair> possibleFuturePositions(Pair start) {
-		ArrayList<Pair> prlist = new ArrayList<Pair>();
-		prlist.add(new Pair(start.x - 1, start.y));
-		prlist.add(new Pair(start.x + 1, start.y));
-		prlist.add(new Pair(start.x, start.y - 1));
-		prlist.add(new Pair(start.x, start.y + 1));
+	ArrayList<Point> surrounds(Point start) {
+		ArrayList<Point> prlist = new ArrayList<Point>();
+		Point p = new Point(start);
+		
+		p.x = start.x - 1;
+		p.y = start.y;
+		if (isPointInsideGrid(p)) {
+			prlist.add(getGridPoint(p));
+		}
+		
+		p.x = start.x + 1;
+		p.y = start.y;
+		if (isPointInsideGrid(p)) {
+			prlist.add(getGridPoint(p));
+		}
+		
+		p.x = start.x;
+		p.y = start.y - 1;
+		if (isPointInsideGrid(p)) {
+			prlist.add(getGridPoint(p));
+		}
+		
+		p.x = start.x;
+		p.y = start.y + 1;
+		if (isPointInsideGrid(p)) {
+			prlist.add(getGridPoint(p));
+		}
 		return prlist;
 	}
 	
-	boolean isPairValidPosition(Pair pr) {
-//		System.out.printf("Pair: %d,%d\n", pr.x, pr.y);
-		if (pr.x < 0 || pr.x >= SIDE_SIZE) {
+	boolean isPointInsideGrid(Point p) {
+		if (p.x < 0 || p.x >= SIDE_SIZE) {
 			return false;
 		}
-		if (pr.y < 0 || pr.y >= SIDE_SIZE) {
-			return false;
-		}
-		if (getGridPoint(pr).water) {
+		if (p.y < 0 || p.y >= SIDE_SIZE) {
 			return false;
 		}
 		return true;
@@ -220,16 +217,21 @@ public class Player extends outpost.sim.Player {
 
 	Point getGridPoint(int x, int y) { return grid[x * SIDE_SIZE + y]; }
 	Point getGridPoint(Pair pr) { return grid[pr.x * SIDE_SIZE + pr.y]; }
+	Point getGridPoint(Point p) { return grid[p.x * SIDE_SIZE + p.y]; }
 
-	Pair pointToPair(Point pt) {
-		return new Pair(pt.x, pt.y);
-	}
+	Pair pointToPair(Point pt) { return new Pair(pt.x, pt.y); }
 	
-	// compute Euclidean distance between two points
-	double distance(Point a, Point b) {	return Math.sqrt((a.x-b.x) * (a.x-b.x) + (a.y-b.y) * (a.y-b.y)); }
-	double distance(Point a, Pair b) {	return Math.sqrt((a.x-b.x) * (a.x-b.x) + (a.y-b.y) * (a.y-b.y)); }
-	double distance(Pair a, Point b) {	return Math.sqrt((a.x-b.x) * (a.x-b.x) + (a.y-b.y) * (a.y-b.y)); }
-	double distance(Pair a, Pair b) {	return Math.sqrt((a.x-b.x) * (a.x-b.x) + (a.y-b.y) * (a.y-b.y)); }
+	double distance(Point a, Point b) {	return Math.abs(a.x-b.x)+Math.abs(a.y-b.y); }
+	double distance(Point a, Pair b) {	return Math.abs(a.x-b.x)+Math.abs(a.y-b.y); }
+	double distance(Pair a, Point b) {	return Math.abs(a.x-b.x)+Math.abs(a.y-b.y); }
+	double distance(Pair a, Pair b) {	return Math.abs(a.x-b.x)+Math.abs(a.y-b.y); }
+	
+	boolean equal(Pair a, Point b) { return a.x == b.x && a.y==b.y; }
+	boolean equal(Pair a, Pair b) { return a.x == b.x && a.y==b.y; }
+	boolean equal(Point a, Pair b) { return a.x == b.x && a.y==b.y; }
+	boolean equal(Point a, Point b) { return a.x == b.x && a.y==b.y; }
+	
+	String pointToString(Point p) { return "" + p.x + ", " + p.y; }
 	
 	class Resource {
 		int water;
