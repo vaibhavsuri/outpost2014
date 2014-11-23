@@ -21,7 +21,7 @@ public class Player extends outpost.sim.Player {
 	Random random = new Random();
 	int tickCounter = 0;
 	
-	Set<Point> currentTargets = new HashSet<Point>();
+	Set<Point> currentDuosTargets = new HashSet<Point>();
 	Set<Duo> busyDuos = new HashSet<Duo>();
 	
 	ArrayList<Duo> allDuos = new ArrayList<Duo>();
@@ -50,7 +50,7 @@ public class Player extends outpost.sim.Player {
 		}
 
 		tickCounter++;
-		currentTargets.clear();
+		currentDuosTargets.clear();
 		busyDuos.clear();
 		
 		playersOutposts = king_outpostlist;
@@ -69,6 +69,7 @@ public class Player extends outpost.sim.Player {
 		
 		//init duos
 		allDuos.clear();
+		currentDuosTargets.clear();
 		// Make every outpost part of a partner
 		for (int j = 0; j < myOutposts.size(); j+= 2) {
 			if(j+1 >= myOutposts.size()) {
@@ -80,7 +81,27 @@ public class Player extends outpost.sim.Player {
 			int followerId = j+1;
 			allDuos.add(new Duo(leaderId, followerId));
 		}
+		for (Duo duo : allDuos) {
+			for(int i = 0; i < 4; i++) {
+				Point enemyBase = getGridPoint(playersBase.get(i));
+				if (i == id) {
+					continue;
+				}
+				if (currentDuosTargets.contains(getGridPoint(enemyBase))) {
+					continue;
+				}
+				
+				Pair p1 = myOutposts.get(duo.p1);
+				Pair p2 = myOutposts.get(duo.p2);
+				if (distance(p1, enemyBase) <= 1 || distance(p2, enemyBase) <= 1) {
+					// if a duo is inside an enemy base, keep it
+					currentDuosTargets.add(enemyBase);
+					busyDuos.add(duo);
+				}
+			}
+		}
 		
+		// Duos code
 		SortedSet<Pair> enemiesByDistToMyGate = getEnemiesByDistanceToPoint(getGridPoint(playersBase.get(id)));
 		for (final Pair enemy : enemiesByDistToMyGate) {
 			SortedSet<Duo> duos = getDuosByDistanceToPoint(getGridPoint(enemy));
@@ -88,44 +109,60 @@ public class Player extends outpost.sim.Player {
 				break;
 			}
 			Duo designatedDuo = duos.first();
-			
-			System.out.printf("duo %s\n", designatedDuo);
-			int leaderId = designatedDuo.leaderId;
-			int followerId = designatedDuo.followerId;
-			
-			Point leader = getGridPoint(myOutposts.get(leaderId));
-			Point follower = getGridPoint(myOutposts.get(followerId));
-//			Point closestEnemy = getClosestUntargetedEnemy(getGridPoint(playersBase.get(id)));
-			Point nextTarget = getGridPoint(enemy);
-			if(nextTarget == null) {
+			Point target = getGridPoint(enemy);
+			if(target == null) {
 				System.out.printf("Duo %s has nothing to do.\n", designatedDuo);
 				continue;
 			}
+			System.out.printf("Designated duo %s. Target %s\n", designatedDuo, pointToString(target));
 			
+			int dist1 = distance(myOutposts.get(designatedDuo.p1), target);
+			int dist2 = distance(myOutposts.get(designatedDuo.p2), target);
+			int leaderId = designatedDuo.p1;
+			int followerId = designatedDuo.p2;
+			if (dist1 > dist2) {
+				leaderId = designatedDuo.p2;
+				followerId = designatedDuo.p1;
+			}
 			
-			// don't move past the enemy
-			if (distance(nextTarget, leader) != 1) {
-				Point leaderNextPosition = nextPositionToGetToPosition(leader, nextTarget);
+			Point leader = getGridPoint(myOutposts.get(leaderId));
+			Point follower = getGridPoint(myOutposts.get(followerId));
+			
+			// if 1 square away from target, go back to base
+			int distLeaderToMyBase = distance(playersBase.get(id), leader);
+			int distFollowerToMyBase = distance(playersBase.get(id), follower);
+			int distTargetToMyBase = distance(playersBase.get(id), target);
+			System.out.printf("%d %d %d\n", distLeaderToMyBase, distFollowerToMyBase, distTargetToMyBase);
+			if (Math.abs(distLeaderToMyBase - distFollowerToMyBase) > 1) {
+				// get together
+				Point leaderNextPosition = nextPositionToGetToPosition(leader, follower);
 				movePair next = new movePair(leaderId, pointToPair(leaderNextPosition));
 				movelist.add(next);
-				
-				// if leader is going to follower location
 				Point followerNextPosition = nextPositionToGetToPosition(follower, leader);
-				if (leaderNextPosition.equals(follower)) {
-					Point tempPoint = new Point(follower.x - (leader.x - follower.x), follower.y - (leader.y - follower.y), false);
-					if (isPointInsideGrid(tempPoint)) {
-						Point positionAwayFromLeader = getGridPoint(tempPoint);
-						if (!positionAwayFromLeader.water) {
-							followerNextPosition = positionAwayFromLeader;
-						}
-					}
-				}
 				movePair next2 = new movePair(followerId, pointToPair(followerNextPosition));
 				movelist.add(next2);
+			} else if (!(distFollowerToMyBase < distTargetToMyBase || distLeaderToMyBase < distTargetToMyBase)){
+				// not safe to attack, go back base
+				Point leaderNextPosition = nextPositionToGetToPosition(leader, getGridPoint(playersBase.get(id)));
+				movePair next = new movePair(leaderId, pointToPair(leaderNextPosition));
+				movelist.add(next);
+				Point followerNextPosition = nextPositionToGetToPosition(follower, getGridPoint(playersBase.get(id)));
+				movePair next2 = new movePair(followerId, pointToPair(followerNextPosition));
+				movelist.add(next2);
+			} else if (distance(target, leader) != 1) {
+				// safe to attack, but far, go close
+				Point leaderNextPosition = nextPositionToGetToPosition(leader, target);
+				movePair next = new movePair(leaderId, pointToPair(leaderNextPosition));
+				movelist.add(next);
+				Point followerNextPosition = nextPositionToGetToPosition(follower, leader);
+				movePair next2 = new movePair(followerId, pointToPair(followerNextPosition));
+				movelist.add(next2);
+			} else {
+				//safe to stay put
 			}
 			
 			busyDuos.add(designatedDuo);
-			currentTargets.add(getGridPoint(enemy));
+			currentDuosTargets.add(getGridPoint(enemy));
 		}
 		
 		return movelist;
@@ -135,8 +172,8 @@ public class Player extends outpost.sim.Player {
 		SortedSet<Duo> duos = new TreeSet<Duo>(new Comparator<Duo>() {
             @Override
             public int compare(Duo o1, Duo o2) {
-            	Pair p1 = playersOutposts.get(id).get(o1.leaderId);
-            	Pair p2 = playersOutposts.get(id).get(o2.leaderId);
+            	Pair p1 = playersOutposts.get(id).get(o1.p1);
+            	Pair p2 = playersOutposts.get(id).get(o2.p1);
             	int dist1 = distance(p1, p);
             	int dist2 = distance(p2, p);
                 int diff = (dist1 - dist2);
@@ -183,14 +220,14 @@ public class Player extends outpost.sim.Player {
 			}
 			
 			for (Pair pr : playersOutposts.get(i)) {
-				if (currentTargets.contains(getGridPoint(pr))) {
+				if (currentDuosTargets.contains(getGridPoint(pr))) {
 					continue;
 				}
 				enemies.add(pr);
 			}
 			
 			Pair pr = playersBase.get(i);
-			if (currentTargets.contains(getGridPoint(pr))) {
+			if (currentDuosTargets.contains(getGridPoint(pr))) {
 				continue;
 			}
 			enemies.add(pr);
@@ -371,15 +408,15 @@ public class Player extends outpost.sim.Player {
 	}
 	
 	class Duo {
-		int leaderId, followerId;
+		int p1, p2;
 		
 		public Duo(int leaderId, int followerId) {
-			this.leaderId = leaderId;
-			this.followerId = followerId;
+			this.p1 = leaderId;
+			this.p2 = followerId;
 		}
 		
 		public String toString() {
-			return "["+leaderId+","+followerId+"]";
+			return "["+p1+","+p2+"]";
 		}
 
 		@Override
@@ -387,8 +424,8 @@ public class Player extends outpost.sim.Player {
 			final int prime = 31;
 			int result = 1;
 			result = prime * result + getOuterType().hashCode();
-			result = prime * result + followerId;
-			result = prime * result + leaderId;
+			result = prime * result + p2;
+			result = prime * result + p1;
 			return result;
 		}
 
@@ -403,9 +440,9 @@ public class Player extends outpost.sim.Player {
 			Duo other = (Duo) obj;
 			if (!getOuterType().equals(other.getOuterType()))
 				return false;
-			if (followerId != other.followerId)
+			if (p2 != other.p2)
 				return false;
-			if (leaderId != other.leaderId)
+			if (p1 != other.p1)
 				return false;
 			return true;
 		}
