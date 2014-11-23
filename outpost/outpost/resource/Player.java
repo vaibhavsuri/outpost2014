@@ -102,6 +102,8 @@ public class Player extends outpost.sim.Player {
 		for (int j = myOutposts.size()-1; j >=0 ; j--) { //the order is reversed so as to make the earlier born outposts to move further rather than block newer ones
 			Pair best_resource = new Pair();
 			best_resource = getSeasonBestResource(king_outpostlist, j, L, W, r); //get the best resource cell to move to within this season
+			if (best_resource.x==0 && best_resource.y==0)
+				best_resource=findClosestWaterCell(myOutposts.get(j));
 			next_moves.add(best_resource);
 			movePair next = new movePair(j, myOutposts.get(j));
 			try{ //because sometimes throws null exception
@@ -201,6 +203,24 @@ public class Player extends outpost.sim.Player {
 		}
 
 		return best_cell;
+	}
+	
+	public Pair findClosestWaterCell(Pair p)
+	{
+		double min_dist = Integer.MAX_VALUE;
+		Pair closestWater = new Pair();
+		for(int i=0; i<100; i++)
+		{
+			for(int j=0; j<100; j++)
+			{
+				if(getGridPoint(i,j).water && (M_distance(new Pair(i,j), p)<min_dist))
+				{
+					min_dist = M_distance(new Pair(i,j), p);
+					closestWater = new Pair(i,j);
+				}
+			}
+		}
+		return closestWater;
 	}
 	
 	public ArrayList<Point> buildPath(Point source, Point destination) {
