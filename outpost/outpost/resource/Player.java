@@ -103,7 +103,17 @@ public class Player extends outpost.sim.Player {
 			Pair best_resource = new Pair();
 			best_resource = getSeasonBestResource(king_outpostlist, j, L, W, r); //get the best resource cell to move to within this season
 			if (best_resource.x==0 && best_resource.y==0)
-				best_resource=findClosestWaterCell(myOutposts.get(j));
+			{
+				Pair closestWater=findClosestWaterCell(myOutposts.get(j));
+				ArrayList<Point> surround_cells = surrounds(getGridPoint(closestWater));
+				for (Point check_cell: surround_cells)
+				{
+					if(!check_cell.water)
+					{
+						best_resource = new Pair(check_cell.x, check_cell.y);
+					}
+				}
+			}
 			next_moves.add(best_resource);
 			movePair next = new movePair(j, myOutposts.get(j));
 			try{ //because sometimes throws null exception
@@ -326,6 +336,11 @@ public class Player extends outpost.sim.Player {
 			}
 		}
 		return board_eval;
+	}
+	
+	public static double E_distance(Pair a, Pair b)
+	{
+		return Math.abs((a.x-b.x)^2+(a.y-b.y)^2);
 	}
 
 	public static double M_distance(Point a, Point b) {
