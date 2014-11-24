@@ -26,6 +26,7 @@ public class Player extends outpost.sim.Player {
 	ArrayList<Duo> allDuos = new ArrayList<Duo>();
 	Set<Point> currentDuosTargets = new HashSet<Point>();
 	Set<Duo> busyDuos = new HashSet<Duo>();
+	Set<Point> duosPointsOnEnemyBase = new HashSet<Point>();
 	Set<Point> waitingToMove = new HashSet<Point>();
 	
 	// resource strategy stuff
@@ -40,8 +41,8 @@ public class Player extends outpost.sim.Player {
 	public void init() {}
 
 	public int delete(ArrayList<ArrayList<Pair>> king_outpostlist, Point[] gridin) {
-//		int del = random.nextInt(king_outpostlist.get(id).size());
-		return king_outpostlist.get(id).size() - 1;
+		duosPointsOnEnemyBase.remove(getGridPoint(king_outpostlist.get(id).get(0)));
+		return 0;
 	}
 
 	public ArrayList<movePair> move(ArrayList<ArrayList<Pair>> king_outpostlist, Point[] gridin, int r, int L, int W, int T) {
@@ -105,13 +106,23 @@ public class Player extends outpost.sim.Player {
 		
 		//instantiating a list of all next moves of outposts
 		next_moves = new ArrayList<Pair>();
-		for (int j = myOutposts.size()-1; j >=0 ; j--) { //the order is reversed so as to make the earlier born outposts to move further rather than block newer ones
-			Pair best_resource = new Pair();
-			best_resource = getSeasonBestResource(king_outpostlist, j, L, W, r); //get the best resource cell to move to within this season
-			if (best_resource.x==0 && best_resource.y==0)
-			{
+		Resource totalResourceNeeded = new Resource((myOutposts.size()+1)*W_PARAM,(myOutposts.size()+1)*L_PARAM);
+		Resource totalResourceGuaranteed = new Resource(0,0);
+		int currentOutpostId = 0;
+		for (; currentOutpostId < myOutposts.size(); currentOutpostId++) { //the order is reversed so as to make the earlier born outposts to move further rather than block newer ones
+			if (duosPointsOnEnemyBase.contains(getGridPoint(myOutposts.get(currentOutpostId)))) {
+				if(outpostIsInEnemyBase(currentOutpostId)) {
+					continue;
+				}
+			}
+			if (totalResourceGuaranteed.isMoreThan(totalResourceNeeded)) {
+				break;
+			}
+			
+			Pair best_resource = getSeasonBestResourceForOutpostId(currentOutpostId); //get the best resource cell to move to within this season
+			if (best_resource == null) {
 					boolean already_occupied = false;
-					Pair closestWater=findClosestWaterCell(myOutposts.get(j));
+					Pair closestWater=findClosestWaterCell(myOutposts.get(currentOutpostId));
 					ArrayList<Point> surround_cells = neighborPoints(getGridPoint(closestWater));
 					for (Point check_cell: surround_cells)
 					{
@@ -135,33 +146,34 @@ public class Player extends outpost.sim.Player {
 					
 					if(already_occupied)
 					{
-						best_resource = getUnoccupiedResource(king_outpostlist, j, L, W, r);
+						best_resource = getUnoccupiedResourceForOutpostId(currentOutpostId);
 						if (best_resource.x==-1 && best_resource.y==-1)
 							best_resource = farthestOutpost(myOutposts);
 					}				
 			}
 			next_moves.add(best_resource);
-			movePair next = new movePair(j, myOutposts.get(j));
-			try{ //because sometimes throws null exception
-			 next = new movePair(j, pointToPair(nextPositionToGetToPosition(getGridPoint(myOutposts.get(j)), new Point(best_resource.x,best_resource.y,false))));
-			}
-			catch(Exception E){}
-			movelist.add(next);
+			try { //because sometimes throws null exception
+				Point nextPosition = nextPositionToGetToPosition(getGridPoint(myOutposts.get(currentOutpostId)), new Point(best_resource.x,best_resource.y,false));
+				movelist.add(new movePair(currentOutpostId, pointToPair(nextPosition)));
+				Resource newResource = markFieldInRadius(nextPosition);
+				totalResourceGuaranteed.water += newResource.water;
+				totalResourceGuaranteed.land += newResource.land;
+			} catch(Exception E){}
+			currentOutpostId++;
 		}
 		
-
-		
 		// Specify the partners
-//		for (int j = 0; j < myOutposts.size(); j+= 2) {
-//			if(j+1 >= myOutposts.size()) {
-//				// wait for follower
-//				continue;
-//			}
-//			
-//			int leaderId = j;
-//			int followerId = j+1;
-//			allDuos.add(new Duo(leaderId, followerId));
-//		}
+		for (int j = currentOutpostId; j < myOutposts.size(); j+= 2) {
+			if(j+1 >= myOutposts.size()) {
+				// wait for follower
+				continue;
+			}
+			System.out.printf("Pairs %d\n", j);
+			
+			int leaderId = j;
+			int followerId = j+1;
+			allDuos.add(new Duo(leaderId, followerId));
+		}
 		
 		// Priority number 1: If we have an enemy base, don't leave it
 		for (Duo duo : allDuos) {
@@ -180,6 +192,8 @@ public class Player extends outpost.sim.Player {
 					// if a duo is inside an enemy base, keep it
 					currentDuosTargets.add(enemyBase);
 					busyDuos.add(duo);
+					duosPointsOnEnemyBase.add(getGridPoint(p1));
+					duosPointsOnEnemyBase.add(getGridPoint(p2));
 				}
 			}
 		}
@@ -201,6 +215,48 @@ public class Player extends outpost.sim.Player {
 		}
 		
 		return movelist;
+	}
+	
+	Resource markFieldInRadius(Point outpost) {
+		Resource newResource = new Resource(0,0);
+		for (int i = Math.max(0, outpost.x - RADIUS); i < Math.min(SIDE_SIZE, outpost.x + RADIUS + 1); i++) {
+			for (int j = Math.max(0, outpost.y - RADIUS); j < Math.min(SIDE_SIZE, outpost.y + RADIUS + 1); j++) {
+				Point p = getGridPoint(i, j);
+				int dist = distance(outpost, p);
+				if (dist > RADIUS) {
+					continue;
+				}
+				
+				if (p.ownerlist.size() == 0) {
+					if (p.water) {
+						newResource.water++;
+					} else {
+						newResource.land++;
+					}
+				}
+				
+				p.ownerlist.add(pointToPair(outpost));
+			}
+		}
+		return newResource;
+	}
+	
+	boolean outpostIsInEnemyBase(int outpostId) {
+		for(int i = 0; i < 4; i++) {
+			Point enemyBase = getGridPoint(playersBase.get(i));
+			if (i == id) {
+				continue;
+			}
+			if (currentDuosTargets.contains(enemyBase)) {
+				continue;
+			}
+			
+			Pair outpost = myOutposts.get(outpostId);
+			if (distance(outpost, enemyBase) <= 1) {
+				return true;
+			}
+		}
+		return false;
 	}
 	
 	void addMovePairForDuo(ArrayList<movePair> movelist, Duo designatedDuo, Point target) {
@@ -475,12 +531,11 @@ public class Player extends outpost.sim.Player {
 	
 
 	//returns the "best" closest cell to get to within this season
-	public Pair getSeasonBestResource(ArrayList<ArrayList<Pair>> king_outpostlist, int index, int L, int W, int r)
+	public Pair getSeasonBestResourceForOutpostId(int index)
 	{
-		ArrayList<Pair> myOutposts = king_outpostlist.get(this.id);
 		Pair p = myOutposts.get(index);
-		Pair best_cell = new Pair(0, 0);
-		double req_ratio = L/W; //this is our required Land to Water ratio
+		Pair best_cell = null;
+		double req_ratio = L_PARAM/W_PARAM; //this is our required Land to Water ratio
 		double best_ratio = -1;
 		int best_land=0;
 		int best_water=0;
@@ -499,7 +554,7 @@ public class Player extends outpost.sim.Player {
 			//checking with the next decided targets of other outposts (if any)
 			if(next_moves.size()>0){
 			for (int i=0; i<next_moves.size(); i++)
-				if(distance(new Pair(k.cell.x, k.cell.y), next_moves.get(i)) < 2*r)
+				if(distance(new Pair(k.cell.x, k.cell.y), next_moves.get(i)) < 2*RADIUS)
 				{
 					too_close=true;
 					break;
@@ -512,7 +567,7 @@ public class Player extends outpost.sim.Player {
 			//checking with all the other outposts on the board
 			for (int t=0; t<4; t++)
 			{
-					ArrayList<Pair> teamOutposts = king_outpostlist.get(t);
+					ArrayList<Pair> teamOutposts = playersOutposts.get(t);
 					for (int i=0; i< teamOutposts.size(); i++)
 					{
 						double separation;
@@ -520,9 +575,9 @@ public class Player extends outpost.sim.Player {
 							continue;
 						
 						if (t==this.id)
-							 separation = r; 
+							 separation = RADIUS; 
 						else
-							 separation = 2*r;//trying to set target farther from other teams' outposts
+							 separation = 2*RADIUS;//trying to set target farther from other teams' outposts
 						
 						if(distance(new Pair(k.cell.x, k.cell.y), teamOutposts.get(i)) < separation)
 						{
@@ -548,7 +603,6 @@ public class Player extends outpost.sim.Player {
 					best_land = k.land;
 					best_water = k.water;
 				}
-				
 			}
 		}
 
@@ -556,9 +610,9 @@ public class Player extends outpost.sim.Player {
 	}
 	
 	
-	public Pair getUnoccupiedResource(ArrayList<ArrayList<Pair>> king_outpostlist, int index, int L, int W, int r)
+	public Pair getUnoccupiedResourceForOutpostId(int index)
 	{
-		ArrayList<Pair> myOutposts = king_outpostlist.get(this.id);
+		ArrayList<Pair> myOutposts = playersOutposts.get(this.id);
 		Pair p = myOutposts.get(index);
 		Pair best_cell = new Pair(-1, -1);
 		double limit = 10 - (tickCounter%10); //the number of ticks left until the season ends - this decides how many steps we can move before the season ends
@@ -576,7 +630,7 @@ public class Player extends outpost.sim.Player {
 			//checking with the next decided targets of other outposts (if any)
 			if(next_moves.size()>0){
 			for (int i=0; i<next_moves.size(); i++)
-				if(distance(new Pair(k.cell.x, k.cell.y), next_moves.get(i)) < 2*r)
+				if(distance(new Pair(k.cell.x, k.cell.y), next_moves.get(i)) < 2*RADIUS)
 				{
 					too_close=true;
 					break;
@@ -589,7 +643,7 @@ public class Player extends outpost.sim.Player {
 			//checking with all the other outposts on the board
 			for (int t=0; t<4; t++)
 			{
-					ArrayList<Pair> teamOutposts = king_outpostlist.get(t);
+					ArrayList<Pair> teamOutposts = playersOutposts.get(t);
 					for (int i=0; i< teamOutposts.size(); i++)
 					{
 						double separation;
@@ -597,9 +651,9 @@ public class Player extends outpost.sim.Player {
 							continue;
 						
 						if (t==this.id)
-							 separation = r; 
+							 separation = RADIUS; 
 						else
-							 separation = 3*r;//trying to set target farther from other teams' outposts
+							 separation = 3*RADIUS;//trying to set target farther from other teams' outposts
 						
 						if(distance(new Pair(k.cell.x, k.cell.y), teamOutposts.get(i)) < separation)
 						{
@@ -772,6 +826,15 @@ public class Player extends outpost.sim.Player {
 		public Resource(int w, int l) {
 			this.water = w;
 			this.land = l;
+		}
+		
+		public boolean isMoreThan(Resource needed) {
+			if (this.water > needed.water) {
+				if (this.land > needed.land) {
+					return true;
+				}
+			}
+			return false;
 		}
 	}
 	
