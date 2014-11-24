@@ -103,7 +103,7 @@ public class Player extends outpost.sim.Player {
 		// Begin movelist code
 		ArrayList<movePair> movelist = new ArrayList<movePair>();
 		
-		
+		System.out.println("Water count "+getWaterCount(myOutposts, r));
 		//instantiating a list of all next moves of outposts
 		next_moves = new ArrayList<Pair>();
 		Resource totalResourceNeeded = new Resource((myOutposts.size()+1)*W_PARAM,(myOutposts.size()+1)*L_PARAM);
@@ -782,6 +782,26 @@ public class Player extends outpost.sim.Player {
 			return false;
 		}
 		return true;
+	}
+	
+	public int getWaterCount(ArrayList<Pair> myOutposts, int r)
+	{
+		ArrayList<Point> water_cells = new ArrayList<Point>();
+		for (int p=0; p< myOutposts.size(); p++)
+		{
+			for(int i=0; i<100; i++)
+			{
+				for(int j=0; j<100; j++)
+				{
+					if ((distance(new Pair(i,j), myOutposts.get(p)) <= r) && (getGridPoint(new Pair(i,j)).water))
+					{
+						if(!water_cells.contains(new Point(i,j,false)))
+							water_cells.add(new Point(i,j,false));
+					}
+				}
+			}
+		}
+		return water_cells.size();
 	}
 	
 	public void set_base_location()
