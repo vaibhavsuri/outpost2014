@@ -41,7 +41,7 @@ public class Player extends outpost.sim.Player {
 
 	public int delete(ArrayList<ArrayList<Pair>> king_outpostlist, Point[] gridin) {
 //		int del = random.nextInt(king_outpostlist.get(id).size());
-		return king_outpostlist.get(id).size();
+		return king_outpostlist.get(id).size() - 1;
 	}
 
 	public ArrayList<movePair> move(ArrayList<ArrayList<Pair>> king_outpostlist, Point[] gridin, int r, int L, int W, int T) {
@@ -64,24 +64,42 @@ public class Player extends outpost.sim.Player {
 		playersOutposts = king_outpostlist;
 		myOutposts = king_outpostlist.get(this.id);
 		tickCounter++;
+		for (int i = 0; i < SIDE_SIZE * SIDE_SIZE; i++) {
+			grid[i].ownerlist.clear();
+		}
+		
 		
 		// preparation code for the duo strategy
 		currentDuosTargets.clear();
 		busyDuos.clear();
 		allDuos.clear();
-		
-		
-		for (int i = 0; i < SIDE_SIZE * SIDE_SIZE; i++) {
-			grid[i].ownerlist.clear();
+		// update waitingToMove by removing outposts that moved
+		Iterator<Point> it = waitingToMove.iterator();
+		whileloop:
+		while(it.hasNext()) {
+			Point p = it.next();
+			for(int i = 0; i < 4; i++) {
+				if (i == this.id) {
+					continue;
+				}
+				
+				for (Pair pr : playersOutposts.get(i)) {
+					if (getGridPoint(pr).equals(p)) {
+						continue whileloop;
+					}
+				}
+			}
+			it.remove();
 		}
-
 		
-//		int id = 0;
-//		for (Pair thisOutpost : myOutposts) {
-//			System.out.printf("Outpost %d: %d,%d\n", id, thisOutpost.x, thisOutpost.y);
-//			id++;
-//		}
+		System.out.printf("New tick\n");
+		int outpostId = 0;
+		for (Pair thisOutpost : myOutposts) {
+			System.out.printf("Outpost %d: %d,%d\n", outpostId, thisOutpost.x, thisOutpost.y);
+			outpostId++;
+		}
 		
+		// Begin movelist code
 		ArrayList<movePair> movelist = new ArrayList<movePair>();
 		
 		
@@ -131,30 +149,9 @@ public class Player extends outpost.sim.Player {
 			movelist.add(next);
 		}
 		
-		// update waitingToMove by removing outposts that moved
-		Iterator<Point> it = waitingToMove.iterator();
-		whileloop:
-		while(it.hasNext()) {
-			Point p = it.next();
-			for(int i = 0; i < 4; i++) {
-				if (i == this.id) {
-					continue;
-				}
-				
-				for (Pair pr : playersOutposts.get(i)) {
-					if (getGridPoint(pr).equals(p)) {
-						continue whileloop;
-					}
-				}
-			}
-			it.remove();
-		}
+
 		
-		
-		//init duos
-		allDuos.clear();
-		currentDuosTargets.clear();
-		// Make every outpost part of a partner
+		// Specify the partners
 //		for (int j = 0; j < myOutposts.size(); j+= 2) {
 //			if(j+1 >= myOutposts.size()) {
 //				// wait for follower
@@ -165,6 +162,8 @@ public class Player extends outpost.sim.Player {
 //			int followerId = j+1;
 //			allDuos.add(new Duo(leaderId, followerId));
 //		}
+		
+		// Priority number 1: If we have an enemy base, don't leave it
 		for (Duo duo : allDuos) {
 			for(int i = 0; i < 4; i++) {
 				Point enemyBase = getGridPoint(playersBase.get(i));
@@ -185,7 +184,7 @@ public class Player extends outpost.sim.Player {
 			}
 		}
 		
-		// Duos code
+		// Priority 2: enemies closest to my base
 		SortedSet<Pair> enemiesByDistToMyBase = getEnemiesByDistanceToPoint(getGridPoint(playersBase.get(id)));
 		for (final Pair enemy : enemiesByDistToMyBase) {
 			SortedSet<Duo> duos = getDuosByDistanceToPoint(getGridPoint(enemy));
@@ -490,9 +489,9 @@ public class Player extends outpost.sim.Player {
 		for (int b = 0; b<board_scored.size(); b++) //loop through the scored cells
 		{
 			Cell k = board_scored.get(b);
-			if (getGridPoint(k.cell.x, k.cell.y).water)
-				continue;
-			
+			if (getGridPoint(k.cell.x, k.cell.y).water) {
+                continue;
+			}
 			//the "too_close" boolean is for determining if this cell would be close to either one
 			//of the next moves of other outposts or close to other outposts
 			boolean too_close = false;
