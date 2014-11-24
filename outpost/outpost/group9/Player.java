@@ -736,11 +736,11 @@ public class Player extends outpost.sim.Player {
 		if (this.id==0)
 			base=new Pair(0,0);
 		else if (this.id==1)
-			base=new Pair(100,0);
+			base=new Pair(99,0);
 		else if (this.id==2)
-			base=new Pair(0,100);
+			base=new Pair(99,99);
 		else
-			base=new Pair(100,100);
+			base=new Pair(0,99);
 	}
 
 	Point getGridPoint(int x, int y) { return grid[x * SIDE_SIZE + y]; }
