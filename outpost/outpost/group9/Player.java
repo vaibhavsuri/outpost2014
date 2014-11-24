@@ -92,22 +92,35 @@ public class Player extends outpost.sim.Player {
 			best_resource = getSeasonBestResource(king_outpostlist, j, L, W, r); //get the best resource cell to move to within this season
 			if (best_resource.x==0 && best_resource.y==0)
 			{
-				if (myOutposts.size() > 1)
-					best_resource = getUnoccupiedResource(king_outpostlist, j, L, W, r);
-				else
-				{
-					System.out.println("find closest water");
+					boolean already_occupied = false;
 					Pair closestWater=findClosestWaterCell(myOutposts.get(j));
 					ArrayList<Point> surround_cells = neighborPoints(getGridPoint(closestWater));
 					for (Point check_cell: surround_cells)
 					{
+						for(int other=0; other<myOutposts.size(); other++)
+						{
+							if (distance(new Pair(check_cell.x, check_cell.y),myOutposts.get(other)) < r)
+							{
+								already_occupied=true;
+								break;
+							}
+						}
+						if (already_occupied)
+							break;
 						if(!check_cell.water)
 						{
 							best_resource = new Pair(check_cell.x, check_cell.y);
 							break;
 						}
+						
 					}
-				}
+					
+					if(already_occupied)
+					{
+						best_resource = getUnoccupiedResource(king_outpostlist, j, L, W, r);
+						if (best_resource.x==-1 && best_resource.y==-1)
+							best_resource = farthestOutpost(myOutposts);
+					}				
 			}
 			next_moves.add(best_resource);
 			movePair next = new movePair(j, myOutposts.get(j));
@@ -548,7 +561,7 @@ public class Player extends outpost.sim.Player {
 	{
 		ArrayList<Pair> myOutposts = king_outpostlist.get(this.id);
 		Pair p = myOutposts.get(index);
-		Pair best_cell = new Pair(0, 0);
+		Pair best_cell = new Pair(-1, -1);
 		double limit = 10 - (tickCounter%10); //the number of ticks left until the season ends - this decides how many steps we can move before the season ends
 
 		for (int b = 0; b<board_scored.size(); b++) //loop through the scored cells
