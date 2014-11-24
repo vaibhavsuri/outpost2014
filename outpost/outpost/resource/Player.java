@@ -88,11 +88,11 @@ public class Player extends outpost.sim.Player {
 		}
 		
 		ArrayList<Pair> myOutposts = king_outpostlist.get(this.id);
-		int id = 0;
-		for (Pair thisOutpost : myOutposts) {
-			System.out.printf("Outpost %d: %d,%d\n", id, thisOutpost.x, thisOutpost.y);
-			id++;
-		}
+//		int id = 0;
+//		for (Pair thisOutpost : myOutposts) {
+//			System.out.printf("Outpost %d: %d,%d\n", id, thisOutpost.x, thisOutpost.y);
+//			id++;
+//		}
 		
 
 		ArrayList<movePair> movelist = new ArrayList<movePair>();
