@@ -34,15 +34,12 @@ public class Player extends outpost.sim.Player {
 	int my_land, my_water;
 	ArrayList<Cell> board_scored;
 	
-	Pair base;
-	
 	public Player(int id_in) {super(id_in);}
 
 	public void init() {}
 
 	public int delete(ArrayList<ArrayList<Pair>> king_outpostlist, Point[] gridin) {
-		duosPointsOnEnemyBase.remove(getGridPoint(king_outpostlist.get(id).get(0)));
-		return 0;
+		return king_outpostlist.size()-1;
 	}
 
 	public ArrayList<movePair> move(ArrayList<ArrayList<Pair>> king_outpostlist, Point[] gridin, int r, int L, int W, int T) {
@@ -59,7 +56,6 @@ public class Player extends outpost.sim.Player {
 			//on the first tick, evaluate all the cells the board and store the scores in 
 			//board_scored
 			board_scored = evaluateBoard(r);
-			set_base_location();
 			playerInitialized = true;
 		}
 		playersOutposts = king_outpostlist;
@@ -76,7 +72,7 @@ public class Player extends outpost.sim.Player {
 		allDuos.clear();
 		// update waitingToMove by removing outposts that moved
 		Iterator<Point> it = waitingToMove.iterator();
-		whileloop:
+		waitingToMoveWhileLoop:
 		while(it.hasNext()) {
 			Point p = it.next();
 			for(int i = 0; i < 4; i++) {
@@ -86,24 +82,32 @@ public class Player extends outpost.sim.Player {
 				
 				for (Pair pr : playersOutposts.get(i)) {
 					if (getGridPoint(pr).equals(p)) {
-						continue whileloop;
+						continue waitingToMoveWhileLoop;
 					}
 				}
 			}
 			it.remove();
 		}
+		// update duosPointsOnEnemyBase by removing outposts that moved
+		it = duosPointsOnEnemyBase.iterator();
+		while(it.hasNext()) {
+			Point p = it.next();
+			if (outpostIsInEnemyBase(p) == null) {
+				it.remove();
+			}
+		}
+		
 		
 		System.out.printf("New tick\n");
-		int outpostId = 0;
-		for (Pair thisOutpost : myOutposts) {
-			System.out.printf("Outpost %d: %d,%d\n", outpostId, thisOutpost.x, thisOutpost.y);
-			outpostId++;
-		}
+//		int outpostId = 0;
+//		for (Pair thisOutpost : myOutposts) {
+//			System.out.printf("Outpost %d: %d,%d\n", outpostId, thisOutpost.x, thisOutpost.y);
+//			outpostId++;
+//		}
 		
 		// Begin movelist code
 		ArrayList<movePair> movelist = new ArrayList<movePair>();
 		
-		System.out.println("Water count "+getWaterCount(myOutposts, r));
 		//instantiating a list of all next moves of outposts
 		next_moves = new ArrayList<Pair>();
 		Resource totalResourceNeeded = new Resource((myOutposts.size()+1)*W_PARAM,(myOutposts.size()+1)*L_PARAM);
@@ -111,9 +115,7 @@ public class Player extends outpost.sim.Player {
 		int currentOutpostId = 0;
 		for (; currentOutpostId < myOutposts.size(); currentOutpostId++) { //the order is reversed so as to make the earlier born outposts to move further rather than block newer ones
 			if (duosPointsOnEnemyBase.contains(getGridPoint(myOutposts.get(currentOutpostId)))) {
-				if(outpostIsInEnemyBase(currentOutpostId)) {
-					continue;
-				}
+				continue;
 			}
 			if (totalResourceGuaranteed.isMoreThan(totalResourceNeeded)) {
 				break;
@@ -168,6 +170,9 @@ public class Player extends outpost.sim.Player {
 				// wait for follower
 				continue;
 			}
+			if (outpostIsInEnemyBase(getGridPoint(myOutposts.get(j))) != null) {
+				continue;
+			}
 			System.out.printf("Pairs %d\n", j);
 			
 			int leaderId = j;
@@ -175,26 +180,12 @@ public class Player extends outpost.sim.Player {
 			allDuos.add(new Duo(leaderId, followerId));
 		}
 		
-		// Priority number 1: If we have an enemy base, don't leave it
-		for (Duo duo : allDuos) {
-			for(int i = 0; i < 4; i++) {
-				Point enemyBase = getGridPoint(playersBase.get(i));
-				if (i == id) {
-					continue;
-				}
-				if (currentDuosTargets.contains(enemyBase)) {
-					continue;
-				}
-				
-				Pair p1 = myOutposts.get(duo.p1);
-				Pair p2 = myOutposts.get(duo.p2);
-				if (distance(p1, enemyBase) <= 1 || distance(p2, enemyBase) <= 1) {
-					// if a duo is inside an enemy base, keep it
-					currentDuosTargets.add(enemyBase);
-					busyDuos.add(duo);
-					duosPointsOnEnemyBase.add(getGridPoint(p1));
-					duosPointsOnEnemyBase.add(getGridPoint(p2));
-				}
+		// Priority number 1: If we have an enemy base, don't worry about it
+		for (Pair pr: myOutposts) {
+			Point p = getGridPoint(pr);
+			Point enemyBase = outpostIsInEnemyBase(p);
+			if (enemyBase != null) {
+				currentDuosTargets.add(enemyBase);
 			}
 		}
 		
@@ -241,7 +232,7 @@ public class Player extends outpost.sim.Player {
 		return newResource;
 	}
 	
-	boolean outpostIsInEnemyBase(int outpostId) {
+	Point outpostIsInEnemyBase(Point outpost) {
 		for(int i = 0; i < 4; i++) {
 			Point enemyBase = getGridPoint(playersBase.get(i));
 			if (i == id) {
@@ -251,12 +242,11 @@ public class Player extends outpost.sim.Player {
 				continue;
 			}
 			
-			Pair outpost = myOutposts.get(outpostId);
 			if (distance(outpost, enemyBase) <= 1) {
-				return true;
+				return enemyBase;
 			}
 		}
-		return false;
+		return null;
 	}
 	
 	void addMovePairForDuo(ArrayList<movePair> movelist, Duo designatedDuo, Point target) {
@@ -281,7 +271,6 @@ public class Player extends outpost.sim.Player {
 		int distLeaderToMyBase = distance(playersBase.get(id), leader);
 		int distFollowerToMyBase = distance(playersBase.get(id), follower);
 		int distTargetToMyBase = distance(playersBase.get(id), target);
-		System.out.printf("%d %d %d\n", distLeaderToMyBase, distFollowerToMyBase, distTargetToMyBase);
 		if (distance(follower, leader) > 1) {
 			// get together
 			Point leaderNextPosition = nextPositionToGetToPosition(leader, follower);
@@ -702,9 +691,9 @@ public class Player extends outpost.sim.Player {
 		Pair farthest = new Pair();
 		for (Pair p: myOutposts)
 		{
-			if (distance(p, base) > max_dist)
+			if (distance(p, playersBase.get(id)) > max_dist)
 			{
-				max_dist = distance(p, base);
+				max_dist = distance(p, playersBase.get(id));
 				farthest = new Pair(p.x, p.y);
 			}
 		}
@@ -782,38 +771,6 @@ public class Player extends outpost.sim.Player {
 			return false;
 		}
 		return true;
-	}
-	
-	public int getWaterCount(ArrayList<Pair> myOutposts, int r)
-	{
-		ArrayList<Point> water_cells = new ArrayList<Point>();
-		for (int p=0; p< myOutposts.size(); p++)
-		{
-			for(int i=0; i<100; i++)
-			{
-				for(int j=0; j<100; j++)
-				{
-					if ((distance(new Pair(i,j), myOutposts.get(p)) <= r) && (getGridPoint(new Pair(i,j)).water))
-					{
-						if(!water_cells.contains(new Point(i,j,false)))
-							water_cells.add(new Point(i,j,false));
-					}
-				}
-			}
-		}
-		return water_cells.size();
-	}
-	
-	public void set_base_location()
-	{
-		if (this.id==0)
-			base=new Pair(0,0);
-		else if (this.id==1)
-			base=new Pair(99,0);
-		else if (this.id==2)
-			base=new Pair(99,99);
-		else
-			base=new Pair(0,99);
 	}
 
 	Point getGridPoint(int x, int y) { return grid[x * SIDE_SIZE + y]; }
