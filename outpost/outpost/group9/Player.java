@@ -33,6 +33,8 @@ public class Player extends outpost.sim.Player {
 	int my_land, my_water;
 	ArrayList<Cell> board_scored;
 	
+	Pair base;
+	
 	public Player(int id_in) {super(id_in);}
 
 	public void init() {}
@@ -56,7 +58,7 @@ public class Player extends outpost.sim.Player {
 			//on the first tick, evaluate all the cells the board and store the scores in 
 			//board_scored
 			board_scored = evaluateBoard(r);
-			
+			set_base_location();
 			playerInitialized = true;
 		}
 		playersOutposts = king_outpostlist;
@@ -82,6 +84,7 @@ public class Player extends outpost.sim.Player {
 		
 		ArrayList<movePair> movelist = new ArrayList<movePair>();
 		
+		
 		//instantiating a list of all next moves of outposts
 		next_moves = new ArrayList<Pair>();
 		for (int j = myOutposts.size()-1; j >=0 ; j--) { //the order is reversed so as to make the earlier born outposts to move further rather than block newer ones
@@ -89,13 +92,20 @@ public class Player extends outpost.sim.Player {
 			best_resource = getSeasonBestResource(king_outpostlist, j, L, W, r); //get the best resource cell to move to within this season
 			if (best_resource.x==0 && best_resource.y==0)
 			{
-				Pair closestWater=findClosestWaterCell(myOutposts.get(j));
-				ArrayList<Point> surround_cells = neighborPoints(getGridPoint(closestWater));
-				for (Point check_cell: surround_cells)
+				if (myOutposts.size() > 1)
+					best_resource = getUnoccupiedResource(king_outpostlist, j, L, W, r);
+				else
 				{
-					if(!check_cell.water)
+					System.out.println("find closest water");
+					Pair closestWater=findClosestWaterCell(myOutposts.get(j));
+					ArrayList<Point> surround_cells = neighborPoints(getGridPoint(closestWater));
+					for (Point check_cell: surround_cells)
 					{
-						best_resource = new Pair(check_cell.x, check_cell.y);
+						if(!check_cell.water)
+						{
+							best_resource = new Pair(check_cell.x, check_cell.y);
+							break;
+						}
 					}
 				}
 			}
@@ -457,7 +467,7 @@ public class Player extends outpost.sim.Player {
 	{
 		ArrayList<Pair> myOutposts = king_outpostlist.get(this.id);
 		Pair p = myOutposts.get(index);
-		Pair best_cell = new Pair();
+		Pair best_cell = new Pair(0, 0);
 		double req_ratio = L/W; //this is our required Land to Water ratio
 		double best_ratio = -1;
 		int best_land=0;
@@ -467,6 +477,9 @@ public class Player extends outpost.sim.Player {
 		for (int b = 0; b<board_scored.size(); b++) //loop through the scored cells
 		{
 			Cell k = board_scored.get(b);
+			if (getGridPoint(k.cell.x, k.cell.y).water)
+				continue;
+			
 			//the "too_close" boolean is for determining if this cell would be close to either one
 			//of the next moves of other outposts or close to other outposts
 			boolean too_close = false;
@@ -505,6 +518,8 @@ public class Player extends outpost.sim.Player {
 							break;
 						}
 					}
+					if (too_close)
+						break;
 			}
 			
 			if(too_close)
@@ -528,6 +543,75 @@ public class Player extends outpost.sim.Player {
 		return best_cell;
 	}
 	
+	
+	public Pair getUnoccupiedResource(ArrayList<ArrayList<Pair>> king_outpostlist, int index, int L, int W, int r)
+	{
+		ArrayList<Pair> myOutposts = king_outpostlist.get(this.id);
+		Pair p = myOutposts.get(index);
+		Pair best_cell = new Pair(0, 0);
+		double limit = 10 - (tickCounter%10); //the number of ticks left until the season ends - this decides how many steps we can move before the season ends
+
+		for (int b = 0; b<board_scored.size(); b++) //loop through the scored cells
+		{
+			Cell k = board_scored.get(b);
+			if (getGridPoint(k.cell.x, k.cell.y).water)
+				continue;
+			
+			//the "too_close" boolean is for determining if this cell would be close to either one
+			//of the next moves of other outposts or close to other outposts
+			boolean too_close = false;
+			
+			//checking with the next decided targets of other outposts (if any)
+			if(next_moves.size()>0){
+			for (int i=0; i<next_moves.size(); i++)
+				if(distance(new Pair(k.cell.x, k.cell.y), next_moves.get(i)) < 2*r)
+				{
+					too_close=true;
+					break;
+				}
+			}
+			
+			if(too_close)
+				continue;
+			
+			//checking with all the other outposts on the board
+			for (int t=0; t<4; t++)
+			{
+					ArrayList<Pair> teamOutposts = king_outpostlist.get(t);
+					for (int i=0; i< teamOutposts.size(); i++)
+					{
+						double separation;
+						if ((i==index) && (this.id==t))
+							continue;
+						
+						if (t==this.id)
+							 separation = r; 
+						else
+							 separation = 3*r;//trying to set target farther from other teams' outposts
+						
+						if(distance(new Pair(k.cell.x, k.cell.y), teamOutposts.get(i)) < separation)
+						{
+							too_close=true;
+							break;
+						}
+					}
+					if (too_close)
+						break;
+			}
+			
+			if(too_close)
+				continue;
+			
+			//check if the cell can be reached within the end of this season
+			if (distance(new Pair(k.cell.x, k.cell.y), p) < limit)
+			{
+				best_cell = new Pair(k.cell.x, k.cell.y);
+				break;
+			}
+		}
+		return best_cell;
+	}
+	
 	public Pair findClosestWaterCell(Pair p)
 	{
 		double min_dist = Integer.MAX_VALUE;
@@ -546,6 +630,20 @@ public class Player extends outpost.sim.Player {
 		return closestWater;
 	}
 	
+	public Pair farthestOutpost(ArrayList<Pair> myOutposts)
+	{
+		double max_dist = Double.NEGATIVE_INFINITY;
+		Pair farthest = new Pair();
+		for (Pair p: myOutposts)
+		{
+			if (distance(p, base) > max_dist)
+			{
+				max_dist = distance(p, base);
+				farthest = new Pair(p.x, p.y);
+			}
+		}
+		return farthest;
+	}
 	//evaluate each cell on the board - used for later stuff in the code to find
 	//which cell is more "attractive" for the outposts
 	public ArrayList<Cell> evaluateBoard(int r)
@@ -618,6 +716,18 @@ public class Player extends outpost.sim.Player {
 			return false;
 		}
 		return true;
+	}
+	
+	public void set_base_location()
+	{
+		if (this.id==0)
+			base=new Pair(0,0);
+		else if (this.id==1)
+			base=new Pair(100,0);
+		else if (this.id==2)
+			base=new Pair(0,100);
+		else
+			base=new Pair(100,100);
 	}
 
 	Point getGridPoint(int x, int y) { return grid[x * SIDE_SIZE + y]; }
