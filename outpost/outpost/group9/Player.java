@@ -558,7 +558,7 @@ public class Player extends outpost.sim.Player {
 		return true;
 	}
 	
-	//Finding an exclusive cell which has the best water resource accessibility
+	//Finding an exclusive cell which has the best water resource accessibility but also satisfies the land requirements
 	public Pair getExclusiveBestCellAroundWater(int index)
 	{
 		Pair closest_best = null;
@@ -568,7 +568,31 @@ public class Player extends outpost.sim.Player {
 		{
 			if(getGridPoint(check.cell.x, check.cell.y).water)
 				continue;
-
+			if(check.land >= L_PARAM)  //Ensuring that we go to a cell with enough land cells around for generating new outposts
+			{
+				if (check.water > max_water || (check.water == max_water &&  distance(new Pair(check.cell.x, check.cell.y), myOutposts.get(index)) < min_dist))
+				{
+					if(tooCloseToOtherOutpost(index, new Pair(check.cell.x, check.cell.y)))
+						continue;
+					min_dist = distance(new Pair(check.cell.x, check.cell.y), myOutposts.get(index));
+					max_water = check.water;
+					closest_best = new Pair(check.cell.x, check.cell.y);
+				}
+			}
+		}
+		return closest_best;
+	}
+	
+	//without worrying about the land requirements, find a cell with best water accessibility - NOT BEING USED RIGHT NOW
+	public Pair getLastResortBestCellAroundWater(int index)
+	{
+		Pair closest_best = null;
+		int max_water = 0;
+		int min_dist = Integer.MAX_VALUE;
+		for (Cell check: board_scored)
+		{
+			if(getGridPoint(check.cell.x, check.cell.y).water)
+				continue;
 			if (check.water > max_water || (check.water == max_water &&  distance(new Pair(check.cell.x, check.cell.y), myOutposts.get(index)) < min_dist))
 			{
 				if(tooCloseToOtherOutpost(index, new Pair(check.cell.x, check.cell.y)))
@@ -633,6 +657,7 @@ public class Player extends outpost.sim.Player {
 		{
 			if(getGridPoint(check.cell.x, check.cell.y).water)
 				continue;
+
 			if (check.water > max_water || (check.water == max_water &&  distance(new Pair(check.cell.x, check.cell.y), myOutposts.get(index)) < min_dist))
 			{
 					min_dist = distance(new Pair(check.cell.x, check.cell.y), myOutposts.get(index));
