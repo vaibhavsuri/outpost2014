@@ -166,11 +166,20 @@ public class Player extends outpost.sim.Player {
 			if (duosPointsOnEnemyBase.contains(outpost)) {
 				continue;
 			}
+
 			
+
 			if (totalResourceGuaranteed.isMoreThan(totalResourceNeeded)) {
 				// Duo strategy
 				outpostsForDuoStrategy.add(currentOutpostId);
-			} else {			
+			} else {	
+				// TODO: be defensive if enemies too close
+//				SortedSet<Point> enemiesByDistToOutpost = getEnemiesCloserThanDist(outpost, 10);
+//				if (enemiesByDistToOutpost.size() != 0 && buildPath(outpost, enemiesByDistToOutpost.first()).size() < 10) {
+//					// Duo strategy
+//					outpostsInDanger.add(currentOutpostId);
+//				}
+				
 				// Resource strategy
 				boolean success = addResourceOutpostToMovelist(movelist, currentOutpostId);
 				if (!success) {
@@ -328,7 +337,8 @@ public class Player extends outpost.sim.Player {
 		} else {
 			//safe to stay put, waiting for enemy to go to leader cell
 			//TODO might not be safe, we need to calculate possible supplylines to be sure
-			if (waitingToMove.contains(target)) {
+			
+			if (distance(target, leader) != 0 && waitingToMove.contains(target)) {
 				// risk moving into enemy cell
 				Point leaderNextPosition = nextPositionToGetToPosition(leader, target);
 				movePair next = new movePair(leaderId, pointToPair(leaderNextPosition));
@@ -436,6 +446,35 @@ public class Player extends outpost.sim.Player {
 		return enemies;
 	}
 	
+	SortedSet<Point> getEnemiesCloserThanDist(final Point outpost, int dist) {
+		SortedSet<Point> enemies = new TreeSet<Point>(new Comparator<Point>() {
+            @Override
+            public int compare(Point o1, Point o2) {
+            	int distToMyBase1 = distance(o1 , outpost);
+            	int distToMyBase2 = distance(o2, outpost);
+                int diff = (distToMyBase1 - distToMyBase2);
+                if (diff > 0) {
+                	return 1;
+                } else if (diff == 0) {
+                	return (o1.x - o2.x) + 100*(o1.y - o2.y);
+                } else {
+                	return -1;
+                }
+            }
+        });
+		
+		for (int i = Math.max(0, outpost.x - dist); i < Math.min(SIDE_SIZE, outpost.x + dist + 1); i++) {
+			for (int j = Math.max(0, outpost.y - dist); j < Math.min(SIDE_SIZE, outpost.y + dist + 1); j++) {
+				Point p = getGridPoint(i, j);
+				Integer playerId = pointToPlayer.get(p);
+				if (playerId != null && playerId != id) {
+					enemies.add(p);
+				}
+			}
+		}
+		return enemies;
+	}
+	
 	Point nextPositionToGetToPosition(Point source, Point destination) {
 		source = getGridPoint(source);
 		destination = getGridPoint(destination);
@@ -527,15 +566,6 @@ public class Player extends outpost.sim.Player {
 		ArrayList<Point> path = new ArrayList<Point>();
 		Point p = destination;
 		while(true) {
-			if (p.water) {
-				System.out.printf("water %s\n", pointToString(p));
-				try {
-					Thread.sleep(1000);
-				} catch (InterruptedException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
-			}
 			path.add(p);
 			if (p.equals(source)) {
 				break;
