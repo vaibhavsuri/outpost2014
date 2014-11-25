@@ -39,7 +39,7 @@ public class Player extends outpost.sim.Player {
 	public void init() {}
 
 	public int delete(ArrayList<ArrayList<Pair>> king_outpostlist, Point[] gridin) {
-		return king_outpostlist.size()-1;
+		return king_outpostlist.get(this.id).size()-1;
 	}
 
 	public ArrayList<movePair> move(ArrayList<ArrayList<Pair>> king_outpostlist, Point[] gridin, int r, int L, int W, int T) {
@@ -98,7 +98,7 @@ public class Player extends outpost.sim.Player {
 		}
 		
 		
-		System.out.printf("New tick\n");
+		//System.out.printf("New tick\n");
 //		int outpostId = 0;
 //		for (Pair thisOutpost : myOutposts) {
 //			System.out.printf("Outpost %d: %d,%d\n", outpostId, thisOutpost.x, thisOutpost.y);
@@ -121,39 +121,13 @@ public class Player extends outpost.sim.Player {
 				break;
 			}
 			
-			Pair best_resource = getSeasonBestResourceForOutpostId(currentOutpostId); //get the best resource cell to move to within this season
-			if (best_resource == null) {
-					boolean already_occupied = false;
-					Pair closestWater=findClosestWaterCell(myOutposts.get(currentOutpostId));
-					ArrayList<Point> surround_cells = neighborPoints(getGridPoint(closestWater));
-					for (Point check_cell: surround_cells)
-					{
-						for(int other=0; other<myOutposts.size(); other++)
-						{
-							if (distance(new Pair(check_cell.x, check_cell.y),myOutposts.get(other)) < r)
-							{
-								already_occupied=true;
-								break;
-							}
-						}
-						if (already_occupied)
-							break;
-						if(!check_cell.water)
-						{
-							best_resource = new Pair(check_cell.x, check_cell.y);
-							break;
-						}
-						
-					}
-					
-					if(already_occupied)
-					{
-						best_resource = getUnoccupiedResourceForOutpostId(currentOutpostId);
-						if (best_resource.x==-1 && best_resource.y==-1)
-							best_resource = farthestOutpost(myOutposts);
-					}				
-			}
+			//Get best resource cell to move to
+			Pair best_resource = getBestResource(currentOutpostId);
+			if (best_resource == null)
+				System.out.println("Was returned null");
 			next_moves.add(best_resource);
+
+			
 			try { //because sometimes throws null exception
 				Point nextPosition = nextPositionToGetToPosition(getGridPoint(myOutposts.get(currentOutpostId)), new Point(best_resource.x,best_resource.y,false));
 				movelist.add(new movePair(currentOutpostId, pointToPair(nextPosition)));
@@ -518,9 +492,111 @@ public class Player extends outpost.sim.Player {
 		return path;
 	}
 	
+	
+	//Method to find the best resource cell an outpost can move to 
+	public Pair getBestResource(int index)
+	{
+		Pair chosen_move = null;
+		//first find if we can move to an exclusive cell with most access to water
+		chosen_move = getExclusiveBestCellAroundWater(index);
+	
+		if (chosen_move==null) //if no such exclusive cell is found, we search for alternates
+		{
+			System.out.println("Could not find exclusive water");
 
-	//returns the "best" closest cell to get to within this season
-	public Pair getSeasonBestResourceForOutpostId(int index)
+			chosen_move = getAlternateResource(index);
+		}
+		
+		return chosen_move;
+	}
+	
+	//Finding an exclusive cell which has the best water resource accessibility
+	public Pair getExclusiveBestCellAroundWater(int index)
+	{
+		Pair closest_best = null;
+		int max_water = 0;
+		int min_dist = Integer.MAX_VALUE;
+		for (Cell check: board_scored)
+		{
+			if(getGridPoint(check.cell.x, check.cell.y).water)
+				continue;
+
+			if (check.water > max_water || (check.water == max_water &&  distance(new Pair(check.cell.x, check.cell.y), myOutposts.get(index)) < min_dist))
+			{
+				if(tooCloseToOtherOutpost(index, new Pair(check.cell.x, check.cell.y)))
+					continue;
+				min_dist = distance(new Pair(check.cell.x, check.cell.y), myOutposts.get(index));
+				max_water = check.water;
+				closest_best = new Pair(check.cell.x, check.cell.y);
+			}
+		}
+		return closest_best;
+	}
+	
+	//Find an alternate resource cell if we cant find an exclusive resource cell
+	public Pair getAlternateResource(int index)
+	{
+		Pair chosen_move = null;
+		
+		//check if there is water reachable by the end of this season
+		if (!waterWithinLimit(index))
+		{
+			//if not, go to the cell with the best water score which is closest to the outpost
+			chosen_move = getClosestBestCellAroundWater(index);
+			return chosen_move;
+		}
+		
+		//if we have access to water within this season
+		
+		//get the best ratio cell which has exclusive access
+		chosen_move = getSeasonBestRatioCellForOutpostId(index);
+		
+		if (chosen_move == null)
+		{
+			chosen_move = getClosestBestCellAroundWater(index); //get the best cell around water without worrying about exclusivity
+		}
+		
+		 if (chosen_move == myOutposts.get(index))
+		 {
+			if (clustered(index)) //if there is a chance of clustering, move towards the an unoccupied resource cell
+				chosen_move = getUnoccupiedResourceForOutpostId(index);
+		 }
+		 
+		 if (chosen_move == null) //if couldn't find unoccupied resource cell, move to the farthest outpost from base
+			 chosen_move = farthestOutpost(myOutposts);
+		 
+		 //if the water access from present location is better than if we move to our new target
+		 if (waterSurround(myOutposts.get(index)) > waterSurround(chosen_move))
+		 {
+			 if (!tooCloseToOtherOutpost(index, myOutposts.get(index))) //if we are not too close to others
+				 chosen_move = myOutposts.get(index); //we don't move to new target
+		 }
+
+		return chosen_move;
+	}
+	
+	//find the closest cell which has the best water access, without worrying about exclusivity
+	public Pair getClosestBestCellAroundWater(int index)
+	{
+		Pair closest_best = null;
+		int max_water = 0;
+		int min_dist = Integer.MAX_VALUE;
+		for (Cell check: board_scored)
+		{
+			if(getGridPoint(check.cell.x, check.cell.y).water)
+				continue;
+			if (check.water > max_water || (check.water == max_water &&  distance(new Pair(check.cell.x, check.cell.y), myOutposts.get(index)) < min_dist))
+			{
+					min_dist = distance(new Pair(check.cell.x, check.cell.y), myOutposts.get(index));
+					max_water = check.water;
+			}
+		}
+		return closest_best;
+	}
+	
+	
+	//returns the "best" closest cell BASED ON RATIO to get to within this season
+	public Pair getSeasonBestRatioCellForOutpostId(int index)
 	{
 		Pair p = myOutposts.get(index);
 		Pair best_cell = null;
@@ -542,8 +618,8 @@ public class Player extends outpost.sim.Player {
 			
 			//checking with the next decided targets of other outposts (if any)
 			if(next_moves.size()>0){
-			for (int i=0; i<next_moves.size(); i++)
-				if(distance(new Pair(k.cell.x, k.cell.y), next_moves.get(i)) < 2*RADIUS)
+			for (int i=0; i < next_moves.size(); i++)
+				if(distance(new Pair(k.cell.x, k.cell.y), next_moves.get(i)) < RADIUS)
 				{
 					too_close=true;
 					break;
@@ -553,30 +629,7 @@ public class Player extends outpost.sim.Player {
 			if(too_close)
 				continue;
 			
-			//checking with all the other outposts on the board
-			for (int t=0; t<4; t++)
-			{
-					ArrayList<Pair> teamOutposts = playersOutposts.get(t);
-					for (int i=0; i< teamOutposts.size(); i++)
-					{
-						double separation;
-						if ((i==index) && (this.id==t))
-							continue;
-						
-						if (t==this.id)
-							 separation = RADIUS; 
-						else
-							 separation = 2*RADIUS;//trying to set target farther from other teams' outposts
-						
-						if(distance(new Pair(k.cell.x, k.cell.y), teamOutposts.get(i)) < separation)
-						{
-							too_close=true;
-							break;
-						}
-					}
-					if (too_close)
-						break;
-			}
+			too_close = tooCloseToOtherOutpost(index, new Pair(k.cell.x, k.cell.y));
 			
 			if(too_close)
 				continue;
@@ -587,7 +640,7 @@ public class Player extends outpost.sim.Player {
 				if(k.water!=0) //to avoid Math errors
 				if ((Math.abs(req_ratio - (k.land/k.water)) < Math.abs(req_ratio - best_ratio)) || (k.land >= best_land && k.water >= best_water)) //the second condition is for edge cases
 				{
-					best_ratio = k.land/k.water;
+					best_ratio = k.land/(k.water);
 					best_cell = new Pair(k.cell.x, k.cell.y);
 					best_land = k.land;
 					best_water = k.water;
@@ -598,7 +651,7 @@ public class Player extends outpost.sim.Player {
 		return best_cell;
 	}
 	
-	
+	//get one resource cell which has NOT been occupied by some other outpost on the board
 	public Pair getUnoccupiedResourceForOutpostId(int index)
 	{
 		ArrayList<Pair> myOutposts = playersOutposts.get(this.id);
@@ -629,31 +682,8 @@ public class Player extends outpost.sim.Player {
 			if(too_close)
 				continue;
 			
-			//checking with all the other outposts on the board
-			for (int t=0; t<4; t++)
-			{
-					ArrayList<Pair> teamOutposts = playersOutposts.get(t);
-					for (int i=0; i< teamOutposts.size(); i++)
-					{
-						double separation;
-						if ((i==index) && (this.id==t))
-							continue;
-						
-						if (t==this.id)
-							 separation = RADIUS; 
-						else
-							 separation = 3*RADIUS;//trying to set target farther from other teams' outposts
-						
-						if(distance(new Pair(k.cell.x, k.cell.y), teamOutposts.get(i)) < separation)
-						{
-							too_close=true;
-							break;
-						}
-					}
-					if (too_close)
-						break;
-			}
-			
+			too_close = tooCloseToOtherOutpost(index, new Pair(k.cell.x, k.cell.y));
+
 			if(too_close)
 				continue;
 			
@@ -667,6 +697,7 @@ public class Player extends outpost.sim.Player {
 		return best_cell;
 	}
 	
+	//find the closest water cell to a given outpost - NOT BEING USED RIGHT NOW
 	public Pair findClosestWaterCell(Pair p)
 	{
 		double min_dist = Integer.MAX_VALUE;
@@ -685,6 +716,7 @@ public class Player extends outpost.sim.Player {
 		return closestWater;
 	}
 	
+	//find the farthest outpost to our base
 	public Pair farthestOutpost(ArrayList<Pair> myOutposts)
 	{
 		double max_dist = Double.NEGATIVE_INFINITY;
@@ -699,6 +731,84 @@ public class Player extends outpost.sim.Player {
 		}
 		return farthest;
 	}
+	
+	//HELPER FUNCTIONS FOR RESOURCE STRATEGY
+	
+	//Get how much water (in ideal situation) would an outpost have if it is on 'p'
+	public int waterSurround(Pair p)
+	{
+		for(Cell i: board_scored)
+		{
+			if ((i.cell.x==p.x) && (i.cell.y==p.y))
+				return i.water;
+		}
+		return 0;
+	}
+	
+	//find if there is any water within the season limit of an outpost
+	public boolean waterWithinLimit(int index)
+	{
+		boolean found_water = false;
+		int a = myOutposts.get(index).x-10;
+		int b = myOutposts.get(index).y-10;
+		int x = a+20;
+		int y = b+20;
+		for (int i = a; i<x; i++)
+		{
+			for (int j = b; j<y; j++)
+			{
+				if ((i>=0) && (i<100) && (j>=0) && (j<100))
+				{
+					if (getGridPoint(i,j).water)
+					{
+						found_water=true;
+						break;
+					}
+				}
+			}
+		}
+		return found_water;
+	}
+	
+	//check if an outpost may get clustered with some other outpost of ours
+	public boolean clustered(int index)
+	{
+		boolean clustered = false;
+		for(int other=0; other<myOutposts.size(); other++)
+		{
+			if (index == other)
+				continue;
+		    if (distance(new Pair(myOutposts.get(index).x, myOutposts.get(index).y),myOutposts.get(other)) < RADIUS)
+				{
+		    		clustered = true;
+					break;
+				}
+		}
+		return clustered;
+	}
+	
+	//check if an outpost will get too close to any other outpost on the board
+	public boolean tooCloseToOtherOutpost(int index, Pair p)
+	{
+		boolean too_close = false;
+		for(int t=0; t < playersOutposts.size(); t++)
+		{
+				for (int i=0; i < playersOutposts.get(t).size(); i++)
+				{
+					if ((i==index) && (this.id==t))
+						continue;
+					
+					if(distance(p, playersOutposts.get(t).get(i)) < RADIUS)
+					{
+						too_close=true;
+						break;
+					}
+				}
+		}
+		return too_close;
+	}
+	
+
 	//evaluate each cell on the board - used for later stuff in the code to find
 	//which cell is more "attractive" for the outposts
 	public ArrayList<Cell> evaluateBoard(int r)
