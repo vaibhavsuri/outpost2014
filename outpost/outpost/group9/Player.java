@@ -24,9 +24,10 @@ public class Player extends outpost.sim.Player {
 	ArrayList<Pair> myOutposts;
 	
 	// duo strategy stuff
+	ArrayList<Integer> outpostsForDuoStrategy = new ArrayList<Integer>();
 	ArrayList<Duo> allDuos = new ArrayList<Duo>();
-	Set<Point> currentDuosTargets = new HashSet<Point>();
-	Set<Duo> busyDuos = new HashSet<Duo>();
+	Set<Point> alreadySelectedDuosTargets = new HashSet<Point>();
+	Set<Duo> duosAlreadyWithTarget = new HashSet<Duo>();
 	Set<Point> duosPointsOnEnemyBase = new HashSet<Point>();
 	Set<Point> waitingToMove = new HashSet<Point>();
 	
@@ -34,6 +35,8 @@ public class Player extends outpost.sim.Player {
 	ArrayList<Pair> next_moves;
 	int my_land, my_water;
 	ArrayList<Cell> board_scored;
+	Resource totalResourceNeeded;
+	Resource totalResourceGuaranteed;
 	
 	public Player(int id_in) {super(id_in);}
 
@@ -85,12 +88,16 @@ public class Player extends outpost.sim.Player {
 			}
 		}
 		
-		
+		//preparation code for the resource strategy
+		next_moves = new ArrayList<Pair>();
+		totalResourceNeeded = new Resource((myOutposts.size())*W_PARAM,(myOutposts.size())*L_PARAM);
+		totalResourceGuaranteed = new Resource(0,0);
 		
 		// preparation code for the duo strategy
-		currentDuosTargets.clear();
-		busyDuos.clear();
+		alreadySelectedDuosTargets.clear();
+		duosAlreadyWithTarget.clear();
 		allDuos.clear();
+		outpostsForDuoStrategy.clear();
 		// update waitingToMove by removing outposts that moved
 		Iterator<Point> it = waitingToMove.iterator();
 		waitingToMoveWhileLoop:
@@ -130,39 +137,42 @@ public class Player extends outpost.sim.Player {
 		ArrayList<movePair> movelist = new ArrayList<movePair>();
 		
 		//instantiating a list of all next moves of outposts
-		next_moves = new ArrayList<Pair>();
-		Resource totalResourceNeeded = new Resource((myOutposts.size()+1)*W_PARAM,(myOutposts.size()+1)*L_PARAM);
-		Resource totalResourceGuaranteed = new Resource(0,0);
-		int currentOutpostId = 0;
-		for (; currentOutpostId < myOutposts.size(); currentOutpostId++) { //the order is reversed so as to make the earlier born outposts to move further rather than block newer ones
-			if (duosPointsOnEnemyBase.contains(getGridPoint(myOutposts.get(currentOutpostId)))) {
+
+		
+		for (int currentOutpostId = myOutposts.size() - 1; currentOutpostId >= 0; currentOutpostId--) {
+			Point outpost = getGridPoint(myOutposts.get(currentOutpostId));
+			if (duosPointsOnEnemyBase.contains(outpost)) {
 				continue;
 			}
-			if (totalResourceGuaranteed.isMoreThan(totalResourceNeeded)) {
-				break;
-			}
 			
-			//Get best resource cell to move to
-			boolean success = addResourceOutpostToMovelist(movelist, currentOutpostId, totalResourceGuaranteed, totalResourceNeeded);
-			if (!success) {
-				System.out.printf("Resource outpost %d failed\n", currentOutpostId);
+			if (totalResourceGuaranteed.isMoreThan(totalResourceNeeded)) {
+				// Duo strategy
+				outpostsForDuoStrategy.add(currentOutpostId);
+			} else {			
+				// Resource strategy
+				boolean success = addResourceOutpostToMovelist(movelist, currentOutpostId);
+				if (!success) {
+					System.out.printf("Resource outpost %d failed\n", currentOutpostId);
+				}
 			}
 		}
 		
 		// Specify the partners
-		for (int j = currentOutpostId; j < myOutposts.size(); j+= 2) {
-			if(j+1 >= myOutposts.size()) {
-				// wait for follower
+		Collections.reverse(outpostsForDuoStrategy);
+		for (int i = 0; i < outpostsForDuoStrategy.size(); i+=2) {
+			int outpostId1 = outpostsForDuoStrategy.get(i);
+			if(i+1 >= outpostsForDuoStrategy.size()) {
+				boolean success = addResourceOutpostToMovelist(movelist, outpostId1);
+				if (!success) {
+					System.out.printf("Resource outpost %d failed\n", outpostId1);
+				}
 				continue;
 			}
-			if (outpostIsInEnemyBase(getGridPoint(myOutposts.get(j))) != null) {
-				continue;
-			}
-			System.out.printf("Pairs %d\n", j);
 			
-			int leaderId = j;
-			int followerId = j+1;
-			allDuos.add(new Duo(leaderId, followerId));
+			int outpostId2 = outpostsForDuoStrategy.get(i+1);
+			
+			System.out.printf("Duo %d %d\n", outpostId1, outpostId2);
+			allDuos.add(new Duo(outpostId1, outpostId2));
 		}
 		
 		// Priority number 1: If we have an enemy base, don't worry about it
@@ -170,7 +180,7 @@ public class Player extends outpost.sim.Player {
 			Point p = getGridPoint(pr);
 			Point enemyBase = outpostIsInEnemyBase(p);
 			if (enemyBase != null) {
-				currentDuosTargets.add(enemyBase);
+				alreadySelectedDuosTargets.add(enemyBase);
 			}
 		}
 		
@@ -236,7 +246,7 @@ public class Player extends outpost.sim.Player {
 			if (i == id) {
 				continue;
 			}
-			if (currentDuosTargets.contains(enemyBase)) {
+			if (alreadySelectedDuosTargets.contains(enemyBase)) {
 				continue;
 			}
 			
@@ -250,8 +260,8 @@ public class Player extends outpost.sim.Player {
 	void addDuoToMovelist(ArrayList<movePair> movelist, Duo designatedDuo, Point target) {
 		System.out.printf("Designated duo %s. Target %s\n", designatedDuo, pointToString(target));
 		
-		busyDuos.add(designatedDuo);
-		currentDuosTargets.add(target);
+		duosAlreadyWithTarget.add(designatedDuo);
+		alreadySelectedDuosTargets.add(target);
 		
 		//decide who is the leader
 		int dist1 = distance(myOutposts.get(designatedDuo.p1), target);
@@ -292,7 +302,7 @@ public class Player extends outpost.sim.Player {
 			}
 			movePair next2 = new movePair(followerId, pointToPair(followerNextPosition));
 			movelist.add(next2);
-			currentDuosTargets.remove(target);
+			alreadySelectedDuosTargets.remove(target);
 		} else if (distance(target, leader) != 1) {
 			// safe to attack, but far, go close
 			//TODO might not be safe, we need to calculate possible supplylines to be sure
@@ -338,7 +348,7 @@ public class Player extends outpost.sim.Player {
         });
 		
 		for(Duo duo : allDuos) {
-			if (busyDuos.contains(duo)) {
+			if (duosAlreadyWithTarget.contains(duo)) {
 				continue;
 			}
 			
@@ -365,7 +375,7 @@ public class Player extends outpost.sim.Player {
         });
 		
 		for(Duo duo : allDuos) {
-			if (busyDuos.contains(duo)) {
+			if (duosAlreadyWithTarget.contains(duo)) {
 				continue;
 			}
 			
@@ -397,14 +407,14 @@ public class Player extends outpost.sim.Player {
 			}
 			
 			for (Pair pr : playersOutposts.get(i)) {
-				if (currentDuosTargets.contains(getGridPoint(pr))) {
+				if (alreadySelectedDuosTargets.contains(getGridPoint(pr))) {
 					continue;
 				}
 				enemies.add(pr);
 			}
 			
 			Pair pr = playersBase.get(i);
-			if (currentDuosTargets.contains(getGridPoint(pr))) {
+			if (alreadySelectedDuosTargets.contains(getGridPoint(pr))) {
 				continue;
 			}
 			enemies.add(pr);
@@ -518,7 +528,7 @@ public class Player extends outpost.sim.Player {
 	
 	
 	//Method to find the best resource cell an outpost can move to 
-	public boolean addResourceOutpostToMovelist(ArrayList<movePair> movelist, int outpostId, Resource totalResourceGuaranteed, Resource totalResourceNeeded)
+	public boolean addResourceOutpostToMovelist(ArrayList<movePair> movelist, int outpostId)
 	{
 		Pair chosen_move = null;
 		//first find if we can move to an exclusive cell with most access to water
