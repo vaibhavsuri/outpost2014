@@ -141,13 +141,13 @@ public class Player extends outpost.sim.Player {
 					duosPointsOnEnemyBase.add(getGridPoint(myOutposts.get(leader)));
 					duosPointsOnEnemyBase.add(getGridPoint(myOutposts.get(follower)));
 					alreadySelectedDuosTargets.add(enemyBase);
-//					System.out.printf("Outposts %d %d dominates base %s\n", leader, follower, pointToString(enemyBase));
+					System.out.printf("Outposts %d %d dominates base %s\n", leader, follower, pointToString(enemyBase));
 					break;
 				}
 			}
 		}
 
-		//System.out.printf("New tick\n");
+		System.out.printf("---- New tick -----\n");
 //		int outpostId = 0;
 //		for (Pair thisOutpost : myOutposts) {
 //			System.out.printf("Outpost %d: %d,%d\n", outpostId, thisOutpost.x, thisOutpost.y);
@@ -179,10 +179,7 @@ public class Player extends outpost.sim.Player {
 		for (int i = 0; i < outpostsForDuoStrategy.size(); i+=2) {
 			int outpostId1 = outpostsForDuoStrategy.get(i);
 			if(i+1 >= outpostsForDuoStrategy.size()) {
-				boolean success = addResourceOutpostToMovelist(movelist, outpostId1);
-				if (!success) {
-					System.out.printf("Resource outpost %d failed\n", outpostId1);
-				}
+				addResourceOutpostToMovelist(movelist, outpostId1);
 				continue;
 			}
 			
@@ -192,10 +189,7 @@ public class Player extends outpost.sim.Player {
 			allDuos.add(new Duo(outpostId1, outpostId2));
 		}
 		
-		// Priority number 1: If we have an enemy base, don't worry about it
-
-		
-		// Priority 2: enemies closest to my base
+		// Priority: enemies closest to my base
 		SortedSet<Pair> enemiesByDistToMyBase = getEnemiesByDistanceToPoint(getGridPoint(playersBase.get(id)));
 		for (final Pair enemy : enemiesByDistToMyBase) {
 			SortedSet<Duo> duos = getDuosByDistanceToPoint(getGridPoint(enemy));
@@ -203,12 +197,18 @@ public class Player extends outpost.sim.Player {
 				break;
 			}
 			Duo designatedDuo = duos.first();
-			Point target = getGridPoint(enemy);
-			if(target == null) {
-				System.out.printf("Duo %s has nothing to do.\n", designatedDuo);
+			addDuoToMovelist(movelist, designatedDuo, getGridPoint(enemy));
+		}
+		
+		// Send these duos to gather resource
+		for(Duo duo : allDuos) {
+			if (duosAlreadyWithTarget.contains(duo)) {
 				continue;
 			}
-			addDuoToMovelist(movelist, designatedDuo, target);
+			
+			addResourceOutpostToMovelist(movelist, duo.p1);
+			addResourceOutpostToMovelist(movelist, duo.p2);
+			System.out.printf("Duo %d %d will gather resource instead\n", duo.p1, duo.p2);
 		}
 		
 		return movelist;
