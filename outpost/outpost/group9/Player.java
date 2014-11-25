@@ -87,6 +87,7 @@ public class Player extends outpost.sim.Player {
 				markFieldInRadius(getGridPoint(outposts.get(j)));
 			}
 		}
+		ArrayList<movePair> movelist = new ArrayList<movePair>();
 		
 		//preparation code for the resource strategy
 		next_moves = new ArrayList<Pair>();
@@ -98,6 +99,7 @@ public class Player extends outpost.sim.Player {
 		duosAlreadyWithTarget.clear();
 		allDuos.clear();
 		outpostsForDuoStrategy.clear();
+		duosPointsOnEnemyBase.clear();
 		// update waitingToMove by removing outposts that moved
 		Iterator<Point> it = waitingToMove.iterator();
 		waitingToMoveWhileLoop:
@@ -116,16 +118,35 @@ public class Player extends outpost.sim.Player {
 			}
 			it.remove();
 		}
-		// update duosPointsOnEnemyBase by removing outposts that moved
-		it = duosPointsOnEnemyBase.iterator();
-		while(it.hasNext()) {
-			Point p = it.next();
-			if (outpostIsInEnemyBase(p) == null) {
-				it.remove();
+		// update duosPointsOnEnemyBase
+		for (int i = 0; i < 4; i++) {
+			if (i == id) {
+				continue;
+			}
+			Point enemyBase = getGridPoint(playersBase.get(i));
+			int counter = 0;
+			int leader = 0;
+			int follower = 0;
+			for (int outpostId = 0; outpostId < myOutposts.size(); outpostId++) {
+				Point p = getGridPoint(myOutposts.get(outpostId));
+				int dist = distance(p, enemyBase);
+				if (dist == 1) {
+					leader = outpostId;
+					counter++;
+				} else if (dist == 2) {
+					follower = outpostId;
+					counter++;
+				}
+				if (counter == 2) {
+					duosPointsOnEnemyBase.add(getGridPoint(myOutposts.get(leader)));
+					duosPointsOnEnemyBase.add(getGridPoint(myOutposts.get(follower)));
+					alreadySelectedDuosTargets.add(enemyBase);
+//					System.out.printf("Outposts %d %d dominates base %s\n", leader, follower, pointToString(enemyBase));
+					break;
+				}
 			}
 		}
-		
-		
+
 		//System.out.printf("New tick\n");
 //		int outpostId = 0;
 //		for (Pair thisOutpost : myOutposts) {
@@ -133,12 +154,7 @@ public class Player extends outpost.sim.Player {
 //			outpostId++;
 //		}
 		
-		// Begin movelist code
-		ArrayList<movePair> movelist = new ArrayList<movePair>();
-		
-		//instantiating a list of all next moves of outposts
-
-		
+		// decide strategy
 		for (int currentOutpostId = myOutposts.size() - 1; currentOutpostId >= 0; currentOutpostId--) {
 			Point outpost = getGridPoint(myOutposts.get(currentOutpostId));
 			if (duosPointsOnEnemyBase.contains(outpost)) {
@@ -157,8 +173,9 @@ public class Player extends outpost.sim.Player {
 			}
 		}
 		
+		// Duo strategy code:
 		// Specify the partners
-		Collections.reverse(outpostsForDuoStrategy);
+		Collections.reverse(outpostsForDuoStrategy); //reverse so the new outposts in the duo strategy does not cause all duos to change
 		for (int i = 0; i < outpostsForDuoStrategy.size(); i+=2) {
 			int outpostId1 = outpostsForDuoStrategy.get(i);
 			if(i+1 >= outpostsForDuoStrategy.size()) {
@@ -176,13 +193,7 @@ public class Player extends outpost.sim.Player {
 		}
 		
 		// Priority number 1: If we have an enemy base, don't worry about it
-		for (Pair pr: myOutposts) {
-			Point p = getGridPoint(pr);
-			Point enemyBase = outpostIsInEnemyBase(p);
-			if (enemyBase != null) {
-				alreadySelectedDuosTargets.add(enemyBase);
-			}
-		}
+
 		
 		// Priority 2: enemies closest to my base
 		SortedSet<Pair> enemiesByDistToMyBase = getEnemiesByDistanceToPoint(getGridPoint(playersBase.get(id)));
@@ -240,23 +251,6 @@ public class Player extends outpost.sim.Player {
 		return newResource;
 	}
 	
-	Point outpostIsInEnemyBase(Point outpost) {
-		for(int i = 0; i < 4; i++) {
-			Point enemyBase = getGridPoint(playersBase.get(i));
-			if (i == id) {
-				continue;
-			}
-			if (alreadySelectedDuosTargets.contains(enemyBase)) {
-				continue;
-			}
-			
-			if (distance(outpost, enemyBase) <= 1) {
-				return enemyBase;
-			}
-		}
-		return null;
-	}
-	
 	void addDuoToMovelist(ArrayList<movePair> movelist, Duo designatedDuo, Point target) {
 		System.out.printf("Designated duo %s. Target %s\n", designatedDuo, pointToString(target));
 		
@@ -279,7 +273,9 @@ public class Player extends outpost.sim.Player {
 		int distLeaderToMyBase = distance(playersBase.get(id), leader);
 		int distFollowerToMyBase = distance(playersBase.get(id), follower);
 		int distTargetToMyBase = distance(playersBase.get(id), target);
-		if (distance(follower, leader) > 1) {
+		if (playersBase.contains(target) && distance(leader, target) <= 2 && distance(follower, target) <= 2) {
+			return;
+		} else if (distance(follower, leader) > 1) {
 			// get together
 			Point leaderNextPosition = nextPositionToGetToPosition(leader, follower);
 			movePair next = new movePair(leaderId, pointToPair(leaderNextPosition));
@@ -431,7 +427,7 @@ public class Player extends outpost.sim.Player {
 		
 		ArrayList<Point> path = buildPath(source, destination);
 		
-		System.out.printf("From %s to %s: move to %s\n", pointToString(source), pointToString(destination), pointToString(path.get(1)));
+//		System.out.printf("From %s to %s: move to %s\n", pointToString(source), pointToString(destination), pointToString(path.get(1)));
 		return path.get(1);
 	}
 	
