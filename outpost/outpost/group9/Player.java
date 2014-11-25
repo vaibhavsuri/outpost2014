@@ -10,15 +10,16 @@ public class Player extends outpost.sim.Player {
 	final static int SIDE_SIZE = 100;
 
 	boolean playerInitialized;
-	Point[] grid = new Point[SIDE_SIZE * SIDE_SIZE];
-	List<ArrayList<Pair>> playersOutposts;
-	List<Pair> playersBase = new ArrayList<>(Arrays.asList(new Pair(0,0), new Pair(99, 0), new Pair(99, 99), new Pair(0,99)));
-	List<Pair> playersSecondBase = new ArrayList<>(Arrays.asList(new Pair(5,5), new Pair(94, 5), new Pair(94, 94), new Pair(5,94)));;
 	int RADIUS;
 	int L_PARAM;
 	int W_PARAM;
 	int MAX_TICKS;
 	
+	// utility stuff
+	Point[] grid = new Point[SIDE_SIZE * SIDE_SIZE];
+	List<ArrayList<Pair>> playersOutposts;
+	List<Pair> playersBase = new ArrayList<>(Arrays.asList(new Pair(0,0), new Pair(99, 0), new Pair(99, 99), new Pair(0,99)));
+	HashMap<Point, Integer> pointToPlayer = new HashMap<Point, Integer>();
 	int tickCounter = 0;
 	ArrayList<Pair> myOutposts;
 	
@@ -56,6 +57,7 @@ public class Player extends outpost.sim.Player {
 			//on the first tick, evaluate all the cells the board and store the scores in 
 			//board_scored
 			board_scored = evaluateBoard(r);
+			
 			playerInitialized = true;
 		}
 		playersOutposts = king_outpostlist;
@@ -64,6 +66,25 @@ public class Player extends outpost.sim.Player {
 		for (int i = 0; i < SIDE_SIZE * SIDE_SIZE; i++) {
 			grid[i].ownerlist.clear();
 		}
+		// init pointToPlayer
+		pointToPlayer.clear();
+		for (int i = 0; i < 4; i++) {
+			ArrayList<Pair> outposts =  king_outpostlist.get(i);
+			for (int j = 0; j < outposts.size(); j++) {
+				pointToPlayer.put(getGridPoint(outposts.get(j)), new Integer(j));
+			}
+		}
+		// init ownerlist with enemy points
+		for (int i = 0; i < 4; i++) {
+			if (i == id) {
+				continue;
+			}
+			ArrayList<Pair> outposts =  king_outpostlist.get(i);
+			for (int j = 0; j < outposts.size(); j++) {
+				markFieldInRadius(getGridPoint(outposts.get(j)));
+			}
+		}
+		
 		
 		
 		// preparation code for the duo strategy
@@ -122,20 +143,10 @@ public class Player extends outpost.sim.Player {
 			}
 			
 			//Get best resource cell to move to
-			Pair best_resource = getBestResource(currentOutpostId);
-			if (best_resource == null)
-				System.out.println("Was returned null");
-			next_moves.add(best_resource);
-
-			
-			try { //because sometimes throws null exception
-				Point nextPosition = nextPositionToGetToPosition(getGridPoint(myOutposts.get(currentOutpostId)), new Point(best_resource.x,best_resource.y,false));
-				movelist.add(new movePair(currentOutpostId, pointToPair(nextPosition)));
-				Resource newResource = markFieldInRadius(nextPosition);
-				totalResourceGuaranteed.water += newResource.water;
-				totalResourceGuaranteed.land += newResource.land;
-			} catch(Exception E){}
-			currentOutpostId++;
+			boolean success = addResourceOutpostToMovelist(movelist, currentOutpostId, totalResourceGuaranteed, totalResourceNeeded);
+			if (!success) {
+				System.out.printf("Resource outpost %d failed\n", currentOutpostId);
+			}
 		}
 		
 		// Specify the partners
@@ -176,7 +187,7 @@ public class Player extends outpost.sim.Player {
 				System.out.printf("Duo %s has nothing to do.\n", designatedDuo);
 				continue;
 			}
-			addMovePairForDuo(movelist, designatedDuo, target);
+			addDuoToMovelist(movelist, designatedDuo, target);
 		}
 		
 		return movelist;
@@ -192,7 +203,20 @@ public class Player extends outpost.sim.Player {
 					continue;
 				}
 				
-				if (p.ownerlist.size() == 0) {
+				boolean isTheClosest = true;
+				boolean isMyFirstOutpost = true;
+				for (Pair pr : p.ownerlist) {
+					int distPr = distance(pr, p);
+					if (distPr < dist) {
+						isTheClosest = false;
+					}
+					Integer playerId = pointToPlayer.get(getGridPoint(pr));
+					if (playerId == id) {
+						isMyFirstOutpost = false;
+					}
+				}
+				
+				if (isTheClosest && isMyFirstOutpost) {
 					if (p.water) {
 						newResource.water++;
 					} else {
@@ -223,7 +247,7 @@ public class Player extends outpost.sim.Player {
 		return null;
 	}
 	
-	void addMovePairForDuo(ArrayList<movePair> movelist, Duo designatedDuo, Point target) {
+	void addDuoToMovelist(ArrayList<movePair> movelist, Duo designatedDuo, Point target) {
 		System.out.printf("Designated duo %s. Target %s\n", designatedDuo, pointToString(target));
 		
 		busyDuos.add(designatedDuo);
@@ -494,20 +518,38 @@ public class Player extends outpost.sim.Player {
 	
 	
 	//Method to find the best resource cell an outpost can move to 
-	public Pair getBestResource(int index)
+	public boolean addResourceOutpostToMovelist(ArrayList<movePair> movelist, int outpostId, Resource totalResourceGuaranteed, Resource totalResourceNeeded)
 	{
 		Pair chosen_move = null;
 		//first find if we can move to an exclusive cell with most access to water
-		chosen_move = getExclusiveBestCellAroundWater(index);
+		chosen_move = getExclusiveBestCellAroundWater(outpostId);
 	
 		if (chosen_move==null) //if no such exclusive cell is found, we search for alternates
 		{
 			System.out.println("Could not find exclusive water");
 
-			chosen_move = getAlternateResource(index);
+			chosen_move = getAlternateResource(outpostId);
 		}
 		
-		return chosen_move;
+		if (chosen_move == null) {
+			System.out.println("chosen_move is null");
+			try {
+				Thread.sleep(2000);
+			} catch (InterruptedException e) {}
+			return false;
+		}
+		next_moves.add(chosen_move);
+
+		
+		try { //because sometimes throws null exception
+			Point nextPosition = nextPositionToGetToPosition(getGridPoint(myOutposts.get(outpostId)), new Point(chosen_move.x,chosen_move.y,false));
+			movelist.add(new movePair(outpostId, pointToPair(nextPosition)));
+			Resource newResource = markFieldInRadius(nextPosition);
+			totalResourceGuaranteed.water += newResource.water;
+			totalResourceGuaranteed.land += newResource.land;
+		} catch(Exception E){}
+		
+		return true;
 	}
 	
 	//Finding an exclusive cell which has the best water resource accessibility
