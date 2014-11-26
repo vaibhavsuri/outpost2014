@@ -73,6 +73,7 @@ public class Player extends outpost.sim.Player {
 			playerInitialized = true;
 		}
 		for (int i = 0; i < 4; i++) {
+			playersOutposts.get(i).clear();
 			for(Pair pr : king_outpostlist.get(i)) {
 				playersOutposts.get(i).add(getGridPoint(pr));
 			}
@@ -85,9 +86,8 @@ public class Player extends outpost.sim.Player {
 		// init pointToPlayer
 		pointToPlayer.clear();
 		for (int i = 0; i < 4; i++) {
-			ArrayList<Pair> outposts =  king_outpostlist.get(i);
-			for (int j = 0; j < outposts.size(); j++) {
-				pointToPlayer.put(getGridPoint(outposts.get(j)), new Integer(j));
+			for (int j = 0; j < playersOutposts.get(i).size(); j++) {
+				pointToPlayer.put(playersOutposts.get(i).get(j), new Integer(j));
 			}
 		}
 		// init ownerlist with enemy points
@@ -95,9 +95,8 @@ public class Player extends outpost.sim.Player {
 			if (i == id) {
 				continue;
 			}
-			ArrayList<Pair> outposts =  king_outpostlist.get(i);
-			for (int j = 0; j < outposts.size(); j++) {
-				markFieldInRadius(getGridPoint(outposts.get(j)));
+			for (int j = 0; j < playersOutposts.get(i).size(); j++) {
+				markFieldInRadius(playersOutposts.get(i).get(j));
 			}
 		}
 		System.out.printf("---- New tick -----\n");
@@ -266,7 +265,8 @@ public class Player extends outpost.sim.Player {
 						isTheClosest = false;
 					}
 					Integer playerId = pointToPlayer.get(getGridPoint(pr));
-					if (playerId == id) {
+					if (playerId == null || playerId == id) {
+						// it is one of our own
 						isMyFirstOutpost = false;
 					}
 				}
@@ -617,10 +617,13 @@ public class Player extends outpost.sim.Player {
 		try { //because sometimes throws null exception
 			Point nextPosition = nextPositionToGetToPosition(getGridPoint(myOutposts.get(outpostId)), new Point(chosen_move.x,chosen_move.y,false));
 			movelist.add(new movePair(outpostId, pointToPair(nextPosition)));
+			System.out.printf("nextPosition: %s\n", pointToString(nextPosition));
 			Resource newResource = markFieldInRadius(nextPosition);
 			totalResourceGuaranteed.water += newResource.water;
 			totalResourceGuaranteed.land += newResource.land;
-		} catch(Exception E){}
+		} catch(Exception E){
+			E.printStackTrace();
+		}
 		
 		return true;
 	}
