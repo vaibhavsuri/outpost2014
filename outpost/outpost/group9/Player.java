@@ -17,11 +17,11 @@ public class Player extends outpost.sim.Player {
 	
 	// utility stuff
 	Point[] grid = new Point[SIDE_SIZE * SIDE_SIZE];
-	List<ArrayList<Pair>> playersOutposts;
-	List<Pair> playersBase = new ArrayList<>(Arrays.asList(new Pair(0,0), new Pair(99, 0), new Pair(99, 99), new Pair(0,99)));
+	List<ArrayList<Point>> playersOutposts = new ArrayList<ArrayList<Point>>();
+	List<Point> playersBase;
 	HashMap<Point, Integer> pointToPlayer = new HashMap<Point, Integer>();
 	int tickCounter = 0;
-	ArrayList<Pair> myOutposts;
+	ArrayList<Point> myOutposts;
 	Point myBase;
 	
 	// duo strategy stuff
@@ -33,7 +33,7 @@ public class Player extends outpost.sim.Player {
 	Set<Point> waitingToMove = new HashSet<Point>();
 	
 	// resource strategy stuff
-	ArrayList<Pair> next_moves;
+	ArrayList<Point> next_moves;
 	int my_land, my_water;
 	ArrayList<Cell> board_scored;
 	Resource totalResourceNeeded;
@@ -60,7 +60,11 @@ public class Player extends outpost.sim.Player {
 			W_PARAM = W;
 			MAX_TICKS = T;
 			
+			playersBase = Arrays.asList(getGridPoint(0, 0), getGridPoint(99, 0), getGridPoint(99, 99), getGridPoint(0, 99));
 			myBase = getGridPoint(playersBase.get(id));
+			for (int i = 0; i < 4; i++) {
+				playersOutposts.add(new ArrayList<Point>());
+			}
 			
 			//on the first tick, evaluate all the cells the board and store the scores in 
 			//board_scored
@@ -68,8 +72,12 @@ public class Player extends outpost.sim.Player {
 			
 			playerInitialized = true;
 		}
-		playersOutposts = king_outpostlist;
-		myOutposts = king_outpostlist.get(this.id);
+		for (int i = 0; i < 4; i++) {
+			for(Pair pr : king_outpostlist.get(i)) {
+				playersOutposts.get(i).add(getGridPoint(pr));
+			}
+		}
+		myOutposts = playersOutposts.get(this.id);
 		tickCounter++;
 		for (int i = 0; i < SIDE_SIZE * SIDE_SIZE; i++) {
 			grid[i].ownerlist.clear();
@@ -96,7 +104,7 @@ public class Player extends outpost.sim.Player {
 		ArrayList<movePair> movelist = new ArrayList<movePair>();
 		
 		//preparation code for the resource strategy
-		next_moves = new ArrayList<Pair>();
+		next_moves = new ArrayList<Point>();
 		totalResourceNeeded = new Resource((myOutposts.size())*W_PARAM,(myOutposts.size())*L_PARAM);
 		totalResourceGuaranteed = new Resource(0,0);
 		
@@ -110,14 +118,14 @@ public class Player extends outpost.sim.Player {
 		Iterator<Point> it = waitingToMove.iterator();
 		waitingToMoveWhileLoop:
 		while(it.hasNext()) {
-			Point p = it.next();
+			Point p1 = it.next();
 			for(int i = 0; i < 4; i++) {
 				if (i == this.id) {
 					continue;
 				}
 				
-				for (Pair pr : playersOutposts.get(i)) {
-					if (getGridPoint(pr).equals(p)) {
+				for (Point p2 : playersOutposts.get(i)) {
+					if (p2.equals(p1)) {
 						continue waitingToMoveWhileLoop;
 					}
 				}
@@ -211,7 +219,7 @@ public class Player extends outpost.sim.Player {
 				break;
 			}
 			for (Duo duo : duos) {
-				boolean tooFar = distance(myOutposts.get(duo.p1), enemy) > 30;
+				boolean tooFar = distance(myOutposts.get(duo.p1), enemy) > 15;
 				boolean moreEnemiesThanDuos = duos.size() < enemiesByDistToMyBase.size();
 				if (!(tooFar && moreEnemiesThanDuos)) {
 					addDuoToMovelist(movelist, duo, getGridPoint(enemy));
@@ -355,8 +363,8 @@ public class Player extends outpost.sim.Player {
 		SortedSet<Duo> duos = new TreeSet<Duo>(new Comparator<Duo>() {
             @Override
             public int compare(Duo o1, Duo o2) {
-            	Pair p1 = playersOutposts.get(id).get(o1.p1);
-            	Pair p2 = playersOutposts.get(id).get(o2.p1);
+            	Point p1 = playersOutposts.get(id).get(o1.p1);
+            	Point p2 = playersOutposts.get(id).get(o2.p1);
             	int dist1 = distance(p1, p);
             	int dist2 = distance(p2, p);
                 int diff = (dist1 - dist2);
@@ -384,8 +392,8 @@ public class Player extends outpost.sim.Player {
 		SortedSet<Duo> duos = new TreeSet<Duo>(new Comparator<Duo>() {
             @Override
             public int compare(Duo o1, Duo o2) {
-            	Pair p1 = playersOutposts.get(id).get(o1.p1);
-            	Pair p2 = playersOutposts.get(id).get(o2.p1);
+            	Point p1 = playersOutposts.get(id).get(o1.p1);
+            	Point p2 = playersOutposts.get(id).get(o2.p1);
                 int diff = (o1.p1 + o1.p2 - (o2.p1 + o2.p2));
                 if (diff > 0) {
                 	return 1;
@@ -429,8 +437,8 @@ public class Player extends outpost.sim.Player {
 				continue;
 			}
 			
-			for (Pair pr : playersOutposts.get(i)) {
-				Point enemy = getGridPoint(pr);
+			for (Point p2 : playersOutposts.get(i)) {
+				Point enemy = getGridPoint(p2);
 				if (alreadySelectedDuosTargets.contains(enemy)) {
 					continue;
 				}
@@ -585,7 +593,7 @@ public class Player extends outpost.sim.Player {
 	//Method to find the best resource cell an outpost can move to 
 	public boolean addResourceOutpostToMovelist(ArrayList<movePair> movelist, int outpostId)
 	{
-		Pair chosen_move = null;
+		Point chosen_move = null;
 		//first find if we can move to an exclusive cell with most access to water
 		chosen_move = getExclusiveBestCellAroundWater(outpostId);
 	
@@ -618,9 +626,9 @@ public class Player extends outpost.sim.Player {
 	}
 	
 	//Finding an exclusive cell which has the best water resource accessibility but also satisfies the land requirements
-	public Pair getExclusiveBestCellAroundWater(int index)
+	public Point getExclusiveBestCellAroundWater(int index)
 	{
-		Pair closest_best = null;
+		Point closest_best = null;
 		int max_water = 0;
 		int min_dist = Integer.MAX_VALUE;
 		for (Cell check: board_scored)
@@ -629,13 +637,13 @@ public class Player extends outpost.sim.Player {
 				continue;
 			if(check.land >= L_PARAM)  //Ensuring that we go to a cell with enough land cells around for generating new outposts
 			{
-				if (check.water > max_water || (check.water == max_water &&  distance(new Pair(check.cell.x, check.cell.y), myOutposts.get(index)) < min_dist))
+				if (check.water > max_water || (check.water == max_water &&  distance(getGridPoint(check.cell.x, check.cell.y), myOutposts.get(index)) < min_dist))
 				{
-					if(tooCloseToOtherOutpost(index, new Pair(check.cell.x, check.cell.y)))
+					if(tooCloseToOtherOutpost(index, getGridPoint(check.cell)))
 						continue;
-					min_dist = distance(new Pair(check.cell.x, check.cell.y), myOutposts.get(index));
+					min_dist = distance(getGridPoint(check.cell), myOutposts.get(index));
 					max_water = check.water;
-					closest_best = new Pair(check.cell.x, check.cell.y);
+					closest_best = getGridPoint(check.cell.x, check.cell.y);
 				}
 			}
 		}
@@ -643,31 +651,31 @@ public class Player extends outpost.sim.Player {
 	}
 	
 	//without worrying about the land requirements, find a cell with best water accessibility - NOT BEING USED RIGHT NOW
-	public Pair getLastResortBestCellAroundWater(int index)
+	public Point getLastResortBestCellAroundWater(int index)
 	{
-		Pair closest_best = null;
+		Point closest_best = null;
 		int max_water = 0;
 		int min_dist = Integer.MAX_VALUE;
 		for (Cell check: board_scored)
 		{
 			if(getGridPoint(check.cell.x, check.cell.y).water)
 				continue;
-			if (check.water > max_water || (check.water == max_water &&  distance(new Pair(check.cell.x, check.cell.y), myOutposts.get(index)) < min_dist))
+			if (check.water > max_water || (check.water == max_water &&  distance(getGridPoint(check.cell.x, check.cell.y), myOutposts.get(index)) < min_dist))
 			{
-				if(tooCloseToOtherOutpost(index, new Pair(check.cell.x, check.cell.y)))
+				if(tooCloseToOtherOutpost(index, getGridPoint(check.cell.x, check.cell.y)))
 					continue;
-				min_dist = distance(new Pair(check.cell.x, check.cell.y), myOutposts.get(index));
+				min_dist = distance(getGridPoint(check.cell.x, check.cell.y), myOutposts.get(index));
 				max_water = check.water;
-				closest_best = new Pair(check.cell.x, check.cell.y);
+				closest_best = getGridPoint(check.cell.x, check.cell.y);
 			}
 		}
 		return closest_best;
 	}
 	
 	//Find an alternate resource cell if we cant find an exclusive resource cell
-	public Pair getAlternateResource(int index)
+	public Point getAlternateResource(int index)
 	{
-		Pair chosen_move = null;
+		Point chosen_move = null;
 		
 		//check if there is water reachable by the end of this season
 		if (!waterWithinLimit(index))
@@ -681,14 +689,12 @@ public class Player extends outpost.sim.Player {
 		
 		//get the best ratio cell which has exclusive access
 		chosen_move = getSeasonBestRatioCellForOutpostId(index);
-		
 		if (chosen_move == null)
 		{
 			chosen_move = getClosestBestCellAroundWater(index); //get the best cell around water without worrying about exclusivity
 		}
 		
-		 if (chosen_move == myOutposts.get(index))
-		 {
+		 if (chosen_move.equals(myOutposts.get(index))) {
 			if (clustered(index)) //if there is a chance of clustering, move towards the an unoccupied resource cell
 				chosen_move = getUnoccupiedResourceForOutpostId(index);
 		 }
@@ -707,9 +713,9 @@ public class Player extends outpost.sim.Player {
 	}
 	
 	//find the closest cell which has the best water access, without worrying about exclusivity
-	public Pair getClosestBestCellAroundWater(int index)
+	public Point getClosestBestCellAroundWater(int index)
 	{
-		Pair closest_best = null;
+		Point closest_best = null;
 		int max_water = 0;
 		int min_dist = Integer.MAX_VALUE;
 		for (Cell check: board_scored)
@@ -717,9 +723,9 @@ public class Player extends outpost.sim.Player {
 			if(getGridPoint(check.cell.x, check.cell.y).water)
 				continue;
 
-			if (check.water > max_water || (check.water == max_water &&  distance(new Pair(check.cell.x, check.cell.y), myOutposts.get(index)) < min_dist))
+			if (check.water > max_water || (check.water == max_water &&  distance(getGridPoint(check.cell), myOutposts.get(index)) < min_dist))
 			{
-					min_dist = distance(new Pair(check.cell.x, check.cell.y), myOutposts.get(index));
+					min_dist = distance(getGridPoint(check.cell), myOutposts.get(index));
 					max_water = check.water;
 			}
 		}
@@ -728,10 +734,10 @@ public class Player extends outpost.sim.Player {
 	
 	
 	//returns the "best" closest cell BASED ON RATIO to get to within this season
-	public Pair getSeasonBestRatioCellForOutpostId(int index)
+	public Point getSeasonBestRatioCellForOutpostId(int index)
 	{
-		Pair p = myOutposts.get(index);
-		Pair best_cell = null;
+		Point p = myOutposts.get(index);
+		Point best_cell = null;
 		double req_ratio = L_PARAM/W_PARAM; //this is our required Land to Water ratio
 		double best_ratio = -1;
 		int best_land=0;
@@ -751,7 +757,7 @@ public class Player extends outpost.sim.Player {
 			//checking with the next decided targets of other outposts (if any)
 			if(next_moves.size()>0){
 			for (int i=0; i < next_moves.size(); i++)
-				if(distance(new Pair(k.cell.x, k.cell.y), next_moves.get(i)) < RADIUS)
+				if(distance(getGridPoint(k.cell.x, k.cell.y), next_moves.get(i)) < RADIUS)
 				{
 					too_close=true;
 					break;
@@ -761,19 +767,19 @@ public class Player extends outpost.sim.Player {
 			if(too_close)
 				continue;
 			
-			too_close = tooCloseToOtherOutpost(index, new Pair(k.cell.x, k.cell.y));
+			too_close = tooCloseToOtherOutpost(index, getGridPoint(k.cell.x, k.cell.y));
 			
 			if(too_close)
 				continue;
 			
 			//check if the cell can be reached within the end of this season
-			if (distance(new Pair(k.cell.x, k.cell.y), p) < limit)
+			if (distance(getGridPoint(k.cell.x, k.cell.y), p) < limit)
 			{
 				if(k.water!=0) //to avoid Math errors
 				if ((Math.abs(req_ratio - (k.land/k.water)) < Math.abs(req_ratio - best_ratio)) || (k.land >= best_land && k.water >= best_water)) //the second condition is for edge cases
 				{
 					best_ratio = k.land/(k.water);
-					best_cell = new Pair(k.cell.x, k.cell.y);
+					best_cell = getGridPoint(k.cell.x, k.cell.y);
 					best_land = k.land;
 					best_water = k.water;
 				}
@@ -784,11 +790,10 @@ public class Player extends outpost.sim.Player {
 	}
 	
 	//get one resource cell which has NOT been occupied by some other outpost on the board
-	public Pair getUnoccupiedResourceForOutpostId(int index)
+	public Point getUnoccupiedResourceForOutpostId(int index)
 	{
-		ArrayList<Pair> myOutposts = playersOutposts.get(this.id);
-		Pair p = myOutposts.get(index);
-		Pair best_cell = new Pair(-1, -1);
+		Point p = myOutposts.get(index);
+		Point best_cell = null;
 		double limit = 10 - (tickCounter%10); //the number of ticks left until the season ends - this decides how many steps we can move before the season ends
 
 		for (int b = 0; b<board_scored.size(); b++) //loop through the scored cells
@@ -804,7 +809,7 @@ public class Player extends outpost.sim.Player {
 			//checking with the next decided targets of other outposts (if any)
 			if(next_moves.size()>0){
 			for (int i=0; i<next_moves.size(); i++)
-				if(distance(new Pair(k.cell.x, k.cell.y), next_moves.get(i)) < 2*RADIUS)
+				if(distance(getGridPoint(k.cell.x, k.cell.y), next_moves.get(i)) < 2*RADIUS)
 				{
 					too_close=true;
 					break;
@@ -814,15 +819,15 @@ public class Player extends outpost.sim.Player {
 			if(too_close)
 				continue;
 			
-			too_close = tooCloseToOtherOutpost(index, new Pair(k.cell.x, k.cell.y));
+			too_close = tooCloseToOtherOutpost(index, getGridPoint(k.cell.x, k.cell.y));
 
 			if(too_close)
 				continue;
 			
 			//check if the cell can be reached within the end of this season
-			if (distance(new Pair(k.cell.x, k.cell.y), p) < limit)
+			if (distance(getGridPoint(k.cell.x, k.cell.y), p) < limit)
 			{
-				best_cell = new Pair(k.cell.x, k.cell.y);
+				best_cell = getGridPoint(k.cell.x, k.cell.y);
 				break;
 			}
 		}
@@ -830,18 +835,18 @@ public class Player extends outpost.sim.Player {
 	}
 	
 	//find the closest water cell to a given outpost - NOT BEING USED RIGHT NOW
-	public Pair findClosestWaterCell(Pair p)
+	public Point findClosestWaterCell(Pair p)
 	{
 		double min_dist = Integer.MAX_VALUE;
-		Pair closestWater = new Pair();
+		Point closestWater = null;
 		for(int i=0; i<100; i++)
 		{
 			for(int j=0; j<100; j++)
 			{
-				if(getGridPoint(i,j).water && (distance(new Pair(i,j), p)<min_dist))
+				if(getGridPoint(i,j).water && (distance(getGridPoint(i,j), p)<min_dist))
 				{
-					min_dist = distance(new Pair(i,j), p);
-					closestWater = new Pair(i,j);
+					min_dist = distance(getGridPoint(i,j), p);
+					closestWater = getGridPoint(i,j);
 				}
 			}
 		}
@@ -849,16 +854,16 @@ public class Player extends outpost.sim.Player {
 	}
 	
 	//find the farthest outpost to our base
-	public Pair farthestOutpost(ArrayList<Pair> myOutposts)
+	public Point farthestOutpost(ArrayList<Point> myOutposts)
 	{
 		double max_dist = Double.NEGATIVE_INFINITY;
-		Pair farthest = new Pair();
-		for (Pair p: myOutposts)
+		Point farthest = new Point();
+		for (Point p: myOutposts)
 		{
 			if (distance(p, playersBase.get(id)) > max_dist)
 			{
 				max_dist = distance(p, playersBase.get(id));
-				farthest = new Pair(p.x, p.y);
+				farthest = getGridPoint(p.x, p.y);
 			}
 		}
 		return farthest;
@@ -867,7 +872,7 @@ public class Player extends outpost.sim.Player {
 	//HELPER FUNCTIONS FOR RESOURCE STRATEGY
 	
 	//Get how much water (in ideal situation) would an outpost have if it is on 'p'
-	public int waterSurround(Pair p)
+	public int waterSurround(Point p)
 	{
 		for(Cell i: board_scored)
 		{
@@ -910,7 +915,7 @@ public class Player extends outpost.sim.Player {
 		{
 			if (index == other)
 				continue;
-		    if (distance(new Pair(myOutposts.get(index).x, myOutposts.get(index).y),myOutposts.get(other)) < RADIUS)
+		    if (distance(getGridPoint(myOutposts.get(index).x, myOutposts.get(index).y),myOutposts.get(other)) < RADIUS)
 				{
 		    		clustered = true;
 					break;
@@ -920,7 +925,7 @@ public class Player extends outpost.sim.Player {
 	}
 	
 	//check if an outpost will get too close to any other outpost on the board
-	public boolean tooCloseToOtherOutpost(int index, Pair p)
+	public boolean tooCloseToOtherOutpost(int index, Point p)
 	{
 		boolean too_close = false;
 		for(int t=0; t < playersOutposts.size(); t++)
@@ -1018,6 +1023,7 @@ public class Player extends outpost.sim.Player {
 	Point getGridPoint(int x, int y) { return grid[x * SIDE_SIZE + y]; }
 	Point getGridPoint(Pair pr) { return grid[pr.x * SIDE_SIZE + pr.y]; }
 	Point getGridPoint(Point p) { return grid[p.x * SIDE_SIZE + p.y]; }
+	Point getGridPoint(Cell p) { return grid[p.cell.x * SIDE_SIZE + p.cell.y]; }
 
 	Pair pointToPair(Point pt) { return new Pair(pt.x, pt.y); }
 	
