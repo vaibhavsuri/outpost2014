@@ -17,11 +17,10 @@ public class Player extends outpost.sim.Player {
 	
 	// utility stuff
 	Point[] grid = new Point[SIDE_SIZE * SIDE_SIZE];
-	HashMap<Point, OutpostId> ownerGrid = new HashMap<Point, OutpostId>();
 	List<ArrayList<Point>> playersOutposts = new ArrayList<ArrayList<Point>>();
+	HashMap<Point, OutpostId> ownerGrid = new HashMap<Point, OutpostId>();
 	List<Point> playersBase;
 	List<Point> playersSecondBase;
-	HashMap<Point, Integer> pointToPlayer = new HashMap<Point, Integer>();
 	int tickCounter = 0;
 	ArrayList<Point> myOutposts;
 	Point myBase;
@@ -33,8 +32,6 @@ public class Player extends outpost.sim.Player {
 	Set<Point> alreadySelectedDuosTargets = new HashSet<Point>();
 	Set<Duo> duosAlreadyWithTarget = new HashSet<Duo>();
 	Set<Point> duosPointsOnEnemyBase = new HashSet<Point>();
-	Set<Point> waitingToMove = new HashSet<Point>();
-	Set<Point> fakeEnemy = new HashSet<Point>();
 	
 	// resource strategy stuff
 	ArrayList<Point> next_moves;
@@ -85,19 +82,18 @@ public class Player extends outpost.sim.Player {
 		}
 		myOutposts = playersOutposts.get(this.id);
 		tickCounter++;
+		// clear grid and poinToOutposts
 		for (int i = 0; i < SIDE_SIZE * SIDE_SIZE; i++) {
 			grid[i].ownerlist.clear();
 			pointToOutposts.get(grid[i]).clear();
 		}
-		// init pointToPlayer
-		pointToPlayer.clear();
+		// init pointToOutposts
 		for (int i = 0; i < 4; i++) {
 			for (int j = 0; j < playersOutposts.get(i).size(); j++) {
-				pointToPlayer.put(playersOutposts.get(i).get(j), new Integer(i));
 				pointToOutposts.get(playersOutposts.get(i).get(j)).add(new OutpostId(playersOutposts.get(i).get(j), j, i));
 			}
 		}
-		// init ownerlist with enemy points
+		// init ownerlist and ownerGrid with enemy points
 		ownerGrid.clear();
 		for (int i = 0; i < 4; i++) {
 			if (i == id) {
@@ -121,25 +117,6 @@ public class Player extends outpost.sim.Player {
 		allDuos.clear();
 		outpostsForDuoStrategy.clear();
 		duosPointsOnEnemyBase.clear();
-		fakeEnemy.clear();
-		// update waitingToMove by removing outposts that moved
-		Iterator<Point> it = waitingToMove.iterator();
-		waitingToMoveWhileLoop:
-		while(it.hasNext()) {
-			Point p1 = it.next();
-			for(int i = 0; i < 4; i++) {
-				if (i == this.id) {
-					continue;
-				}
-				
-				for (Point p2 : playersOutposts.get(i)) {
-					if (p2.equals(p1)) {
-						continue waitingToMoveWhileLoop;
-					}
-				}
-			}
-			it.remove();
-		}
 		// update duosPointsOnEnemyBase
 		for (int i = 0; i < 4; i++) {
 			if (i == id) {
@@ -164,6 +141,27 @@ public class Player extends outpost.sim.Player {
 					duosPointsOnEnemyBase.add(getGridPoint(myOutposts.get(follower)));
 					alreadySelectedDuosTargets.add(enemyBase);
 					System.out.printf("Outposts %d %d dominates base %s\n", leader, follower, pointToString(enemyBase));
+					
+					List<List<Point>> formation1 = Arrays.asList(Arrays.asList(getGridPoint(1, 0), getGridPoint(1, 1)), Arrays.asList(getGridPoint(98, 0), getGridPoint(98, 1)), Arrays.asList(getGridPoint(98, 99), getGridPoint(98, 98)), Arrays.asList(getGridPoint(1, 99), getGridPoint(1, 98)));
+					List<List<Point>> formation2 = Arrays.asList(Arrays.asList(getGridPoint(0, 1), getGridPoint(1, 1)), Arrays.asList(getGridPoint(99, 1), getGridPoint(98, 1)), Arrays.asList(getGridPoint(99, 98), getGridPoint(98, 98)), Arrays.asList(getGridPoint(0, 98), getGridPoint(1, 98)));
+					
+					if(myOutposts.get(follower).equals(formation1.get(i).get(1))) {
+						//follower is in pivot position
+						if(myOutposts.get(leader).equals(formation1.get(i).get(0)) && pointHasEnemyOutpost(myOutposts.get(leader))) {
+							movelist.add(new movePair(leader, pointToPair(formation2.get(i).get(1))));
+							movelist.add(new movePair(follower, pointToPair(formation2.get(i).get(0))));
+						} else {
+							movelist.add(new movePair(leader, pointToPair(formation1.get(i).get(1))));
+							movelist.add(new movePair(follower, pointToPair(formation1.get(i).get(0))));
+						}
+					} else {
+						//follower is not in pivot position
+						movelist.add(new movePair(leader, pointToPair(formation1.get(i).get(1))));
+						movelist.add(new movePair(follower, pointToPair(myOutposts.get(leader))));
+					}
+					
+
+					
 					break;
 				}
 			}
@@ -459,7 +457,8 @@ public class Player extends outpost.sim.Player {
 //			}
 //			radius++;
 //		}
-		if(pointAlreadyHasMineOutpost(leaderNextPosition)) {
+		
+		if(!leaderNextPosition.equals(leader) && !leaderNextPosition.equals(follower) && pointAlreadyHasMineOutpost(leaderNextPosition)) {
 			if (distance(leader, playersSecondBase.get(id)) > distance(follower, playersSecondBase.get(id))) {
 				leaderNextPosition = follower;
 				followerNextPosition = nextPositionToGetToPosition(follower, playersSecondBase.get(id));
@@ -481,6 +480,16 @@ public class Player extends outpost.sim.Player {
 		ArrayList<OutpostId> outpostInP = pointToOutposts.get(p);
 		for (OutpostId outpostIdLoop : outpostInP) {
 			if (outpostIdLoop.ownerId == id) {
+				return true;
+			}
+		}
+		return false;
+	}
+	
+	public boolean pointHasEnemyOutpost(Point p)	{
+		ArrayList<OutpostId> outpostInP = pointToOutposts.get(p);
+		for (OutpostId outpostIdLoop : outpostInP) {
+			if (outpostIdLoop.ownerId != id) {
 				return true;
 			}
 		}
@@ -602,8 +611,7 @@ public class Player extends outpost.sim.Player {
 		for (int i = Math.max(0, outpost.x - dist); i < Math.min(SIDE_SIZE, outpost.x + dist + 1); i++) {
 			for (int j = Math.max(0, outpost.y - dist); j < Math.min(SIDE_SIZE, outpost.y + dist + 1); j++) {
 				Point p = getGridPoint(i, j);
-				Integer playerId = pointToPlayer.get(p);
-				if (playerId != null && playerId != id) {
+				if (pointToOutposts.get(p).size() != 0 && !pointAlreadyHasMineOutpost(p)) {
 					enemies.add(p);
 				}
 			}
