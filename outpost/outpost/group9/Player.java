@@ -17,12 +17,14 @@ public class Player extends outpost.sim.Player {
 	
 	// utility stuff
 	Point[] grid = new Point[SIDE_SIZE * SIDE_SIZE];
+	HashMap<Point, OutpostId> ownerGrid = new HashMap<Point, OutpostId>();
 	List<ArrayList<Point>> playersOutposts = new ArrayList<ArrayList<Point>>();
 	List<Point> playersBase;
 	HashMap<Point, Integer> pointToPlayer = new HashMap<Point, Integer>();
 	int tickCounter = 0;
 	ArrayList<Point> myOutposts;
 	Point myBase;
+	HashMap<Point, ArrayList<OutpostId>> pointToOutposts = new HashMap<Point, ArrayList<OutpostId>>();
 	
 	// duo strategy stuff
 	ArrayList<Integer> outpostsForDuoStrategy = new ArrayList<Integer>();
@@ -31,6 +33,7 @@ public class Player extends outpost.sim.Player {
 	Set<Duo> duosAlreadyWithTarget = new HashSet<Duo>();
 	Set<Point> duosPointsOnEnemyBase = new HashSet<Point>();
 	Set<Point> waitingToMove = new HashSet<Point>();
+	Set<Point> fakeEnemy = new HashSet<Point>();
 	
 	// resource strategy stuff
 	ArrayList<Point> next_moves;
@@ -38,7 +41,6 @@ public class Player extends outpost.sim.Player {
 	ArrayList<Cell> board_scored;
 	Resource totalResourceNeeded;
 	Resource totalResourceGuaranteed;
-
 
 	
 	public Player(int id_in) {super(id_in);}
@@ -53,6 +55,7 @@ public class Player extends outpost.sim.Player {
 		if (!playerInitialized) {
 			for (int i = 0; i < gridin.length; i++) {
 				grid[i] = new Point(gridin[i]);
+				pointToOutposts.put(grid[i], new ArrayList<OutpostId>());
 			}
 
 			RADIUS = r;
@@ -82,21 +85,24 @@ public class Player extends outpost.sim.Player {
 		tickCounter++;
 		for (int i = 0; i < SIDE_SIZE * SIDE_SIZE; i++) {
 			grid[i].ownerlist.clear();
+			pointToOutposts.get(grid[i]).clear();
 		}
 		// init pointToPlayer
 		pointToPlayer.clear();
 		for (int i = 0; i < 4; i++) {
 			for (int j = 0; j < playersOutposts.get(i).size(); j++) {
-				pointToPlayer.put(playersOutposts.get(i).get(j), new Integer(j));
+				pointToPlayer.put(playersOutposts.get(i).get(j), new Integer(i));
+				pointToOutposts.get(playersOutposts.get(i).get(j)).add(new OutpostId(playersOutposts.get(i).get(j), j, i));
 			}
 		}
 		// init ownerlist with enemy points
+		ownerGrid.clear();
 		for (int i = 0; i < 4; i++) {
 			if (i == id) {
 				continue;
 			}
 			for (int j = 0; j < playersOutposts.get(i).size(); j++) {
-				markFieldInRadius(playersOutposts.get(i).get(j));
+				markFieldInRadius(playersOutposts.get(i).get(j), j, i);
 			}
 		}
 		System.out.printf("---- New tick -----\n");
@@ -113,6 +119,7 @@ public class Player extends outpost.sim.Player {
 		allDuos.clear();
 		outpostsForDuoStrategy.clear();
 		duosPointsOnEnemyBase.clear();
+		fakeEnemy.clear();
 		// update waitingToMove by removing outposts that moved
 		Iterator<Point> it = waitingToMove.iterator();
 		waitingToMoveWhileLoop:
@@ -211,6 +218,20 @@ public class Player extends outpost.sim.Player {
 			allDuos.add(new Duo(outpostId1, outpostId2));
 		}
 		
+		for (Point enemy : fakeEnemy) {
+			if (alreadySelectedDuosTargets.contains(enemy)) {
+				continue;
+			}
+			SortedSet<Duo> duos = getDuosByDistanceToPoint(getGridPoint(enemy));
+			if (duos.size() == 0) {
+				break;
+			}
+			for (Duo duo : duos) {
+				addDuoToMovelist(movelist, duo, getGridPoint(enemy));
+				break;
+			}
+		}
+		
 		SortedSet<Point> enemiesByDistToMyBase = getEnemiesByDistanceToPoint(myBase);
 		for (Point enemy : enemiesByDistToMyBase) {
 			SortedSet<Duo> duos = getDuosByDistanceToPoint(getGridPoint(enemy));
@@ -244,10 +265,12 @@ public class Player extends outpost.sim.Player {
 			}
 		}
 		
+//		PlayerStatistics.printStats();
+		
 		return movelist;
 	}
 	
-	Resource markFieldInRadius(Point outpost) {
+	Resource markFieldInRadius(Point outpost, int outpostListId, int playerId) {
 		Resource newResource = new Resource(0,0);
 		for (int i = Math.max(0, outpost.x - RADIUS); i < Math.min(SIDE_SIZE, outpost.x + RADIUS + 1); i++) {
 			for (int j = Math.max(0, outpost.y - RADIUS); j < Math.min(SIDE_SIZE, outpost.y + RADIUS + 1); j++) {
@@ -257,21 +280,23 @@ public class Player extends outpost.sim.Player {
 					continue;
 				}
 				
-				boolean isTheClosest = true;
-				boolean isMyFirstOutpost = true;
-				for (Pair pr : p.ownerlist) {
-					int distPr = distance(pr, p);
-					if (distPr < dist) {
-						isTheClosest = false;
-					}
-					Integer playerId = pointToPlayer.get(getGridPoint(pr));
-					if (playerId == null || playerId == id) {
-						// it is one of our own
-						isMyFirstOutpost = false;
+				p.ownerlist.add(pointToPair(outpost));
+				
+				OutpostId outpostId = ownerGrid.get(p);
+				// update ownerGrid
+				if (outpostId == null) {
+					ownerGrid.put(p, new OutpostId(outpost, outpostListId, playerId));
+				} else {
+					if (dist < distance(outpostId.p, p)) {
+						ownerGrid.put(p, new OutpostId(outpost, outpostListId, playerId));
+					} else if (outpostId.ownerId != playerId && dist == distance(outpostId.p, p)) {
+						ownerGrid.remove(p);
+//						System.out.printf("Point %s is undecided when considering %s old %s newDist %d\n", pointToString(p), pointToString(outpost), outpostId.toString(), dist);
 					}
 				}
 				
-				if (isTheClosest && isMyFirstOutpost) {
+				// add new resource
+				if (outpostId == null || (outpostId.ownerId != id && dist < distance(outpostId.p, p))) {
 					if (p.water) {
 						newResource.water++;
 					} else {
@@ -279,15 +304,25 @@ public class Player extends outpost.sim.Player {
 					}
 				}
 				
-				p.ownerlist.add(pointToPair(outpost));
 			}
 		}
 		return newResource;
 	}
 	
+	Point getClosestOwnerInOwnerlist(Point p) {
+		Point closest = null;
+		int closestDist = Integer.MAX_VALUE;
+		for (Pair pr : p.ownerlist) {
+			int dist = distance(pr, p);
+			if (closestDist <= dist) {
+				closestDist = dist;
+				closest = getGridPoint(pr);
+			}
+		}
+		return closest;
+	}
+	
 	void addDuoToMovelist(ArrayList<movePair> movelist, Duo designatedDuo, Point target) {
-		System.out.printf("Designated duo %s. Target %s\n", designatedDuo, pointToString(target));
-		
 		duosAlreadyWithTarget.add(designatedDuo);
 
 		Point outpost1 = getGridPoint(myOutposts.get(designatedDuo.p1));
@@ -306,8 +341,9 @@ public class Player extends outpost.sim.Player {
 			return;
 		}
 		
+		System.out.printf("Designated duo %s (%s,%s). Target %s\n", designatedDuo, pointToString(outpost1), pointToString(outpost2), pointToString(target));
 		alreadySelectedDuosTargets.add(target);
-		
+
 		//decide who is the leader
 		int dist1 = buildPath(outpost1, target).size();
 		int dist2 = buildPath(outpost2, target).size();
@@ -319,50 +355,141 @@ public class Player extends outpost.sim.Player {
 		}
 		Point leader = getGridPoint(myOutposts.get(leaderId));
 		Point follower = getGridPoint(myOutposts.get(followerId));
+
+		Point leaderNextPosition = nextPositionToGetToPosition(leader, target);
+		Point followerNextPosition = nextPositionToGetToPosition(follower, leader);
 		
-		Point myBase = getGridPoint(playersBase.get(id));
-		int distLeaderToMyBase = buildPath(myBase, leader).size();
-		int distFollowerToMyBase = buildPath(myBase, follower).size();
-		int distTargetToMyBase = buildPath(myBase, target).size();
-		if (playersBase.contains(target) && distance(leader, target) <= 2 && distance(follower, target) <= 2) {
-			return;
-		}  else if (!(distFollowerToMyBase < distTargetToMyBase || distLeaderToMyBase < distTargetToMyBase)){
-			// not safe to attack, go back base
-			// TODO add supplyline logic here
-			Point leaderNextPosition = nextPositionToGetToPosition(leader, getGridPoint(playersBase.get(id)));
-			movePair next = new movePair(leaderId, pointToPair(leaderNextPosition));
-			movelist.add(next);
-			Point followerNextPosition = nextPositionToGetToPosition(follower, leader);
-			if (leaderNextPosition.equals(follower)) {
-				followerNextPosition = nextPositionToGetToPosition(follower, getGridPoint(playersBase.get(id)));
+		
+		if(pointAlreadyHasMineOutpost(leaderNextPosition)) {
+			int radius = 1;
+			for (int i = Math.max(0, target.x - radius); i < Math.min(SIDE_SIZE, target.x + radius + 1); i++) {
+				for (int j = Math.max(0, target.y - radius); j < Math.min(SIDE_SIZE, target.y + radius + 1); j++) {
+					Point p = getGridPoint(i, j);
+					
+					if (p.water) {
+						continue;
+					}
+
+					leaderNextPosition = nextPositionToGetToPosition(leader, p);
+					followerNextPosition = nextPositionToGetToPosition(follower, leader);
+					
+					if (!pointAlreadyHasMineOutpost(leaderNextPosition)) {
+						break;
+					}
+				}
 			}
-			movePair next2 = new movePair(followerId, pointToPair(followerNextPosition));
-			movelist.add(next2);
-			alreadySelectedDuosTargets.remove(target);
-		} else if (distance(target, leader) != 1) {
-			// safe to attack, but far, go close
-			//TODO might not be safe, we need to calculate possible supplylines to be sure
-			Point leaderNextPosition = nextPositionToGetToPosition(leader, target);
-			movePair next = new movePair(leaderId, pointToPair(leaderNextPosition));
-			movelist.add(next);
-			Point followerNextPosition = nextPositionToGetToPosition(follower, leader);
-			movePair next2 = new movePair(followerId, pointToPair(followerNextPosition));
-			movelist.add(next2);
-		} else {
-			//safe to stay put, waiting for enemy to go to leader cell
-			//TODO might not be safe, we need to calculate possible supplylines to be sure
-			
-			if (distance(target, leader) != 0 && waitingToMove.contains(target)) {
-				// risk moving into enemy cell
-				Point leaderNextPosition = nextPositionToGetToPosition(leader, target);
-				movePair next = new movePair(leaderId, pointToPair(leaderNextPosition));
-				movelist.add(next);
-				Point followerNextPosition = nextPositionToGetToPosition(follower, leader);
-				movePair next2 = new movePair(followerId, pointToPair(followerNextPosition));
-				movelist.add(next2);
-			}
-			waitingToMove.add(target);
 		}
+
+		
+		
+		HashMap<Point, OutpostId> copyOwnerGrid = new HashMap<Point, OutpostId>(ownerGrid);
+		markFieldInRadius(leaderNextPosition, leaderId, id);
+		markFieldInRadius(followerNextPosition, followerId, id);
+		
+		recoverdowhile:
+		do {
+			if (hasWeakSupplyLine(leaderNextPosition, id)) {
+//				System.out.printf("Was about to move from %s to %s\n", pointToString(leader), pointToString(leaderNextPosition));
+				OutpostId targetPoint = ownerGrid.get(target);
+				if (targetPoint == null) {
+					System.out.printf("null\n");
+				} else {
+					System.out.printf("%s\n", targetPoint.toString());
+				}
+				System.out.println(isPointSafe(target, id));
+				
+//				alreadySelectedDuosTargets.remove(target);
+				
+				leaderNextPosition = leader;
+				followerNextPosition = follower;
+				ownerGrid = copyOwnerGrid;
+				markFieldInRadius(leaderNextPosition, leaderId, id);
+				markFieldInRadius(followerNextPosition, followerId, id);
+				
+				if (!hasWeakSupplyLine(leaderNextPosition, id)) {
+//					System.out.printf("Success by staying in place\n");
+					PlayerStatistics.STAY_IN_PLACE.counter++;
+					break recoverdowhile;
+				}
+					
+					
+				ArrayList<Point> validNeighbors = neighborPoints(follower);
+				for (Point p: validNeighbors){
+					if (p.water) {
+						continue;
+					}
+
+					leaderNextPosition = follower;
+					followerNextPosition = p;
+					ownerGrid = copyOwnerGrid;
+					markFieldInRadius(leaderNextPosition, leaderId, id);
+					markFieldInRadius(followerNextPosition, followerId, id);
+					
+					if (!hasWeakSupplyLine(leaderNextPosition, id)) {
+						break;
+					}
+				}
+				if (!hasWeakSupplyLine(leaderNextPosition, id)) {
+//					System.out.printf("Success by checking follower's neighbors\n");
+					PlayerStatistics.FOLLOWERS_NEIGHBORS.counter++;
+					break recoverdowhile;
+				}
+				
+				
+				validNeighbors = neighborPoints(leader);
+				for (Point p: validNeighbors){
+					if (p.water) {
+						continue;
+					}
+
+					leaderNextPosition = p;
+					followerNextPosition = leader;
+					ownerGrid = copyOwnerGrid;
+					markFieldInRadius(leaderNextPosition, leaderId, id);
+					markFieldInRadius(followerNextPosition, followerId, id);
+					
+					if (!hasWeakSupplyLine(leaderNextPosition, id)) {
+						break;
+					}
+				}
+				if (!hasWeakSupplyLine(leaderNextPosition, id)) {
+//					System.out.printf("Success by checking leader's neighbors\n");
+					PlayerStatistics.LEADER_NEIGHBORS.counter++;
+					break recoverdowhile;
+				}
+				
+				if (distance(leader, myBase) > distance(follower, myBase)) {
+					leaderNextPosition = nextPositionToGetToPosition(leader, follower);
+					followerNextPosition = nextPositionToGetToPosition(follower, myBase);
+				} else {
+					leaderNextPosition = nextPositionToGetToPosition(leader, myBase);
+					followerNextPosition = nextPositionToGetToPosition(follower, leader);
+				}
+				if (!hasWeakSupplyLine(leaderNextPosition, id)) {
+//					System.out.printf("Success by going to base\n");
+					PlayerStatistics.BASE.counter++;
+					break recoverdowhile;
+				}
+//				System.out.printf("Good luck!\n");
+				PlayerStatistics.LUCK.counter++;
+			}
+		} while(false);
+		
+		ownerGrid = copyOwnerGrid;
+		markFieldInRadius(leaderNextPosition, leaderId, id);
+		markFieldInRadius(followerNextPosition, followerId, id);
+		movelist.add(new movePair(leaderId, pointToPair(leaderNextPosition)));
+		movelist.add(new movePair(followerId, pointToPair(followerNextPosition)));
+	}
+	
+	public boolean pointAlreadyHasMineOutpost(Point p)	{
+		ArrayList<OutpostId> outpostInP = pointToOutposts.get(p);
+		for (OutpostId outpostIdLoop : outpostInP) {
+			if (outpostIdLoop.ownerId == id) {
+				return true;
+			}
+		}
+		return false;
 	}
 	
 //	void addGeneralizedDuoToMovelist(ArrayList<movePair> movelist, GeneralizedDuo generalizedDuo, final ArrayList<Point> targets) {
@@ -588,6 +715,99 @@ public class Player extends outpost.sim.Player {
 		}
 		return enemies;
 	}
+
+	
+	public boolean isPointSafe(Point p, int playerId) {
+		OutpostId closest = null;
+		int closestDist = Integer.MAX_VALUE;
+		boolean tie = false;
+		for(Pair pr : p.ownerlist) {
+			Point prPoint = getGridPoint(pr);
+			ArrayList<OutpostId> prPointOwner = pointToOutposts.get(prPoint);
+			for (OutpostId candidate : prPointOwner) {
+				int candidateDist = distance(candidate.p, p);
+				if(candidate.ownerId != playerId) {
+					candidateDist = Math.max(0, candidateDist-1);
+				}
+				if (candidateDist < closestDist) {
+					closest = candidate;
+					closestDist = candidateDist;
+					tie = false;
+				}
+				if (candidateDist == closestDist && closest.ownerId != playerId) {
+					tie = true;
+				}
+			}
+		}
+		if(closest != null && closest.ownerId != playerId) {
+			return false;
+		}
+		if(tie) {
+			return false;
+		}
+		return true;
+	}
+	
+	public boolean hasWeakSupplyLine(Point source, int playerId) {
+		source = getGridPoint(source);
+		Point destination = playersBase.get(playerId);
+//		HashMap<Point, Point> parent = new HashMap<Point, Point>();
+		ArrayList<Point> discover = new ArrayList<Point>();
+		Set<Point> visited = new HashSet<Point>();
+		discover.add(source);
+
+		while(true)
+		{
+			if(discover.size()!=0)
+			{
+				Point current = discover.remove(0);
+				visited.add(current);
+//				System.out.println(this.id+" analyzing: "+current.x+" "+current.y);
+				
+				if (equal(current, destination)) {
+//					System.out.println("Found destination");
+					break;
+				}
+				
+				ArrayList<Point> validNeighbors = neighborPoints(current);
+				Collections.shuffle(validNeighbors);
+				for (Point p: validNeighbors){
+					if (p.water) {
+						continue;
+					}
+					if (visited.contains(p)) {
+						continue;
+					}
+					if (discover.contains(p)) {
+						continue;
+					}
+					
+					
+					if (!isPointSafe(p, playerId)) {
+						continue;
+					}
+					
+//					OutpostId outpostId = ownerGrid.get(p);
+//					if (outpostId == null && p.ownerlist.size() != 0) {
+//						continue;
+//					}
+//					if (outpostId != null && outpostId.ownerId != playerId) {
+//						continue;
+//					}
+					
+					discover.add(p);
+//					parent.put(p, current);
+				}
+			}
+			else {
+//				System.out.printf("No Path from %s to %s\n", pointToString(source), pointToString(destination));
+				return true;			
+			}
+		}
+		
+		return false;
+	}
+	
 	
 	Point nextPositionToGetToPosition(Point source, Point destination) {
 		source = getGridPoint(source);
@@ -618,39 +838,17 @@ public class Player extends outpost.sim.Player {
 			if(discover.size()!=0)
 			{
 				Point current = discover.remove(0);
-				
-//				System.out.println(this.id+" analyzing: "+current.x+" "+current.y);
 				visited.add(current);
+//				System.out.println(this.id+" analyzing: "+current.x+" "+current.y);
 				
-				if (equal(current, destination))
-				{
+				if (equal(current, destination)) {
 //					System.out.println("Found destination");
 					break;
 				}
 				
 				ArrayList<Point> validNeighbors = neighborPoints(current);
 				Collections.shuffle(validNeighbors);
-				
-				// Move on the coordinate with highest difference first
-//				final Point destinationFinal = destination;
-//				Collections.sort(validNeighbors, new Comparator<Point>() {
-//		            @Override
-//		            public int compare(Point o1, Point o2) {
-//		            	int p1 = Math.max(Math.abs(o1.x - destinationFinal.x), Math.abs(o1.y - destinationFinal.y));
-//		            	int p2 = Math.max(Math.abs(o2.x - destinationFinal.x), Math.abs(o2.y - destinationFinal.y));
-//		                int diff = p1 - p2;
-//		                if (diff > 0) {
-//		                	return 1;
-//		                } else if (diff == 0) {
-//		                	return (o1.x - o2.x) + 100*(o1.y - o2.y);
-//		                } else {
-//		                	return -1;
-//		                }
-//		            }
-//		        });
-	        
-				for (Point p: validNeighbors)
-				{
+				for (Point p: validNeighbors){
 					if (p.water) {
 						continue;
 					}
@@ -661,17 +859,11 @@ public class Player extends outpost.sim.Player {
 						continue;
 					}
 					
-//					if(p.ownerlist.size() == 0 || p.ownerlist.get(0).x==this.id) 
-//					{
-//						continue;
-//					}
-					
 					discover.add(p);
 					parent.put(p, current);
 				}
 			}
-			else 
-			{
+			else {
 				System.out.printf("No Path from %s to %s\n", pointToString(source), pointToString(destination));
 				return null;			
 			}
@@ -694,7 +886,6 @@ public class Player extends outpost.sim.Player {
 		
 		return path;
 	}
-	
 	
 	//Method to find the best resource cell an outpost can move to 
 	public boolean addResourceOutpostToMovelist(ArrayList<movePair> movelist, int outpostId)
@@ -723,7 +914,7 @@ public class Player extends outpost.sim.Player {
 		try { //because sometimes throws null exception
 			Point nextPosition = nextPositionToGetToPosition(getGridPoint(myOutposts.get(outpostId)), new Point(chosen_move.x,chosen_move.y,false));
 			movelist.add(new movePair(outpostId, pointToPair(nextPosition)));
-			Resource newResource = markFieldInRadius(nextPosition);
+			Resource newResource = markFieldInRadius(nextPosition, outpostId, id);
 			totalResourceGuaranteed.water += newResource.water;
 			totalResourceGuaranteed.land += newResource.land;
 		} catch(Exception E){
@@ -1267,28 +1458,29 @@ public class Player extends outpost.sim.Player {
 	
 	class OutpostId {
 		Point p;
-		int id;
-		
-		public OutpostId(Point p, int id) {
+		int outpostId;
+		int ownerId;
+		public OutpostId(Point p, int outpostId, int ownerId) {
+			super();
 			this.p = p;
-			this.id = id;
+			this.outpostId = outpostId;
+			this.ownerId = ownerId;
 		}
-		
 		@Override
 		public String toString() {
-			return "OutpostId [p=" + pointToString(p) + ", id=" + id + "]";
+			return "OutpostId [p=" + pointToString(p) + ", outpostId=" + outpostId
+					+ ", ownerId=" + ownerId + "]";
 		}
-
 		@Override
 		public int hashCode() {
 			final int prime = 31;
 			int result = 1;
 			result = prime * result + getOuterType().hashCode();
-			result = prime * result + id;
+			result = prime * result + outpostId;
+			result = prime * result + ownerId;
 			result = prime * result + ((p == null) ? 0 : p.hashCode());
 			return result;
 		}
-
 		@Override
 		public boolean equals(Object obj) {
 			if (this == obj)
@@ -1300,7 +1492,9 @@ public class Player extends outpost.sim.Player {
 			OutpostId other = (OutpostId) obj;
 			if (!getOuterType().equals(other.getOuterType()))
 				return false;
-			if (id != other.id)
+			if (outpostId != other.outpostId)
+				return false;
+			if (ownerId != other.ownerId)
 				return false;
 			if (p == null) {
 				if (other.p != null)
@@ -1309,9 +1503,25 @@ public class Player extends outpost.sim.Player {
 				return false;
 			return true;
 		}
-
 		private Player getOuterType() {
 			return Player.this;
+		}
+		
+
+	}
+	public enum PlayerStatistics {
+		STAY_IN_PLACE,
+		FOLLOWERS_NEIGHBORS,
+		LEADER_NEIGHBORS,
+		BASE,
+		LUCK;
+		
+		public int counter = 0;
+		public static void printStats() {
+			for(PlayerStatistics s : PlayerStatistics.values()) {
+				System.out.printf("%s: %d,", s, s.counter);
+			}
+			System.out.printf("\n");
 		}
 	}
 }
