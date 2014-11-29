@@ -32,6 +32,7 @@ public class Player extends outpost.sim.Player {
 	Set<Point> alreadySelectedDuosTargets = new HashSet<Point>();
 	Set<Duo> duosAlreadyWithTarget = new HashSet<Duo>();
 	Set<Point> duosPointsOnEnemyBase = new HashSet<Point>();
+	Set<Point> waitingToMove = new HashSet<Point>();
 	
 	// resource strategy stuff
 	ArrayList<Point> next_moves;
@@ -103,6 +104,16 @@ public class Player extends outpost.sim.Player {
 				markFieldInRadius(playersOutposts.get(i).get(j), j, i);
 			}
 		}
+		Iterator<Point> it = waitingToMove.iterator();
+		while(it.hasNext()) {
+			Point p = it.next();
+			if (pointHasEnemyOutpost(p)) {
+				continue;
+			}
+			it.remove();
+		}
+		
+		
 		System.out.printf("---- New tick -----\n");
 		ArrayList<movePair> movelist = new ArrayList<movePair>();
 		
@@ -352,6 +363,10 @@ public class Player extends outpost.sim.Player {
 		recoverdowhile:
 		do {
 			if (hasWeakSupplyLine(leaderNextPosition, id)) {
+				if (waitingToMove.contains(target)) {
+					break;
+				}
+				waitingToMove.add(target);
 //				System.out.printf("Was about to move from %s to %s\n", pointToString(leader), pointToString(leaderNextPosition));
 				OutpostId targetPoint = ownerGrid.get(target);
 				if (targetPoint == null) {
@@ -361,7 +376,8 @@ public class Player extends outpost.sim.Player {
 				}
 				System.out.println(isPointSafe(target, id));
 				
-//				alreadySelectedDuosTargets.remove(target);
+				
+				alreadySelectedDuosTargets.remove(target);
 				
 				leaderNextPosition = leader;
 				followerNextPosition = follower;
