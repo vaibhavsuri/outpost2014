@@ -1,12 +1,12 @@
-package outpost.group3sub3;
+package outpost.group3_3;
 
 import java.util.*;
 
 import outpost.sim.Pair;
 import outpost.sim.Point;
 import outpost.sim.movePair;
-import outpost.group3sub3.Board;
-import outpost.group3sub3.Outpost;
+import outpost.group3_3.Board;
+import outpost.group3_3.Outpost;
 
 public class Player extends outpost.sim.Player {
 	static int size = 100;

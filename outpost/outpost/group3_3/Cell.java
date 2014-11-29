@@ -1,8 +1,8 @@
-package outpost.group3sub3;
+package outpost.group3_3;
 
 import java.util.ArrayList;
 
-import outpost.group3sub3.Consts;
+import outpost.group3_3.Consts;
 
 public class Cell {
 	public static enum CellType { LAND, WATER };

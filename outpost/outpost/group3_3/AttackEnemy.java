@@ -1,9 +1,9 @@
-package outpost.group3sub3;
+package outpost.group3_3;
 
 import java.util.ArrayList;
 
-import outpost.group3sub3.Outpost;
-public class AttackEnemy extends outpost.group3sub3.Strategy{
+import outpost.group3_3.Outpost;
+public class AttackEnemy extends outpost.group3_3.Strategy{
 
 	AttackEnemy() {}
 	

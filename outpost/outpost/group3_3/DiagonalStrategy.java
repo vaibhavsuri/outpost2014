@@ -1,10 +1,10 @@
-package outpost.group3sub3;
+package outpost.group3_3;
 
 import java.util.ArrayList;
 
-import outpost.group3sub3.Outpost;
+import outpost.group3_3.Outpost;
 
-public class DiagonalStrategy extends outpost.group3sub3.Strategy {
+public class DiagonalStrategy extends outpost.group3_3.Strategy {
 	DiagonalStrategy() {}
 
 	public void run(Board board, ArrayList<Outpost> outposts) {

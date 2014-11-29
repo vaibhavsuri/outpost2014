@@ -1,4 +1,4 @@
-package outpost.group3sub3;
+package outpost.group3_3;
 
 public class Consts {
 	public final static int dimension = 100;

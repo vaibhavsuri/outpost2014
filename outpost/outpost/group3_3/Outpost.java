@@ -1,8 +1,8 @@
-package outpost.group3sub3;
+package outpost.group3_3;
 
 import java.util.*;
 
-import outpost.group3sub3.Loc;
+import outpost.group3_3.Loc;
 
 public class Outpost {
 	private int id;

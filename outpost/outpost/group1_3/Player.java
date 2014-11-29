@@ -4,10 +4,9 @@ import java.util.*;
 
 import outpost.sim.Pair;
 import outpost.sim.movePair;
-
-import outpost.group1.common.Game;
-import outpost.group1.common.Outpost;
-import outpost.group1.common.Move;
+import outpost.group1_3.common.Game;
+import outpost.group1_3.common.Move;
+import outpost.group1_3.common.Outpost;
 
 public class Player extends outpost.sim.Player {
     public Player(int id_in) {

@@ -1,10 +1,10 @@
-package outpost.group3sub3;
+package outpost.group3_3;
 
 import java.util.ArrayList;
 
-import outpost.group3sub3.Outpost;
+import outpost.group3_3.Outpost;
 
-public class ConsumerStrategy extends outpost.group3sub3.Strategy {
+public class ConsumerStrategy extends outpost.group3_3.Strategy {
 
   private int r;
   private int size = 100;

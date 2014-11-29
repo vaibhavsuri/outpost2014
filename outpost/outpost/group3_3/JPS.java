@@ -1,8 +1,8 @@
-package outpost.group3sub3;
+package outpost.group3_3;
 
 import java.util.*;
 
-import outpost.group3sub3.Loc;
+import outpost.group3_3.Loc;
 
 /* Implementation of jump point search as described in http://users.cecs.anu.edu.au/~dharabor/data/papers/harabor-grastien-aaai11.pdf
  * Ported from https://github.com/qiao/PathFinding.js/

@@ -1,4 +1,4 @@
-package outpost.group3sub3;
+package outpost.group3_3;
 
 public class Loc {
 	public int x;

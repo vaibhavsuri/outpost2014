@@ -1,11 +1,11 @@
-package outpost.group3sub3;
+package outpost.group3_3;
 
 import java.util.*;
 
-import outpost.group3sub3.Cell;
-import outpost.group3sub3.Consts;
-import outpost.group3sub3.JPS;
-import outpost.group3sub3.Loc;
+import outpost.group3_3.Cell;
+import outpost.group3_3.Consts;
+import outpost.group3_3.JPS;
+import outpost.group3_3.Loc;
 import outpost.sim.Pair;
 import outpost.sim.Point;
 
