@@ -221,13 +221,12 @@ public class Player extends outpost.sim.Player {
 				continue;
 			}
 			
-			if (enemiesInMySide.size() != 0 && currentOutpostId -2 >= 0) {
+			if (currentOutpostId == myOutposts.size() - 1 && enemiesInMySide.size() != 0 && currentOutpostId -2 >= 0) {
 				List<List<Point>> formation1 = Arrays.asList(Arrays.asList(getGridPoint(1, 0), getGridPoint(0, 1)), Arrays.asList(getGridPoint(98, 0), getGridPoint(99, 1)), Arrays.asList(getGridPoint(98, 99), getGridPoint(99, 98)), Arrays.asList(getGridPoint(1, 99), getGridPoint(0, 98)));
 				
 				movelist.add(new movePair(currentOutpostId, pointToPair(nextPositionToGetToPosition(myOutposts.get(currentOutpostId), myBase))));
 				movelist.add(new movePair(currentOutpostId-1, pointToPair(nextPositionToGetToPosition(myOutposts.get(currentOutpostId-1), formation1.get(id).get(0)))));
 				movelist.add(new movePair(currentOutpostId-2, pointToPair(nextPositionToGetToPosition(myOutposts.get(currentOutpostId-2), formation1.get(id).get(1)))));
-				enemiesInMySide.clear();
 				currentOutpostId -= 2;
 			} else if (totalResourceGuaranteed.isMoreThan(totalResourceNeeded)) {
 				// Duo strategy
@@ -263,6 +262,11 @@ public class Player extends outpost.sim.Player {
 			if (duos.size() == 0) {
 				break;
 			}
+			ArrayList<Point> path = buildPath(myBase, enemy);
+			if (distance(myBase, enemy) > 70 && hasWeakSupplyLine(path.get(path.size()-1), id)) {
+				continue;
+			}
+			
 			for (Duo duo : duos) {
 				boolean tooFar = distance(myOutposts.get(duo.p1), enemy) > 30;
 				boolean moreEnemiesThanDuos = duos.size() < enemiesByDistToMyBase.size();
@@ -606,7 +610,7 @@ public class Player extends outpost.sim.Player {
             @Override
             public int compare(Point o1, Point o2) {
             	int distToMyBase1 = distance(o1 , p);
-            	int distToMyBase2 = distance(o2, p);
+            	int distToMyBase2 = distance(o2 , p);
                 int diff = (distToMyBase1 - distToMyBase2);
                 if (diff > 0) {
                 	return 1;
@@ -776,9 +780,25 @@ public class Player extends outpost.sim.Player {
 		return path.get(1);
 	}
 	
+//	HashMap<BuildPathCacheItem, ArrayList<Point>> cache = new HashMap<BuildPathCacheItem, ArrayList<Point>>();
 	public ArrayList<Point> buildPath(Point source, Point destination) {
 		source = getGridPoint(source);
 		destination = getGridPoint(destination);
+		
+//		BuildPathCacheItem cacheItem = new BuildPathCacheItem(source, destination);
+//		if (cache.containsKey(cacheItem)) {
+//			return cache.get(cacheItem);
+//		}
+//		cacheItem.a = destination;
+//		cacheItem.b = source;
+//		if (cache.containsKey(cacheItem)) {
+//			ArrayList<Point> result = cache.get(cacheItem);
+//			Collections.reverse(result);
+//			return result;
+//		}
+//		if (cache.size() > 3000) {
+//			cache.clear();
+//		}
 		
 		HashMap<Point, Point> parent = new HashMap<Point, Point>();
 		ArrayList<Point> discover = new ArrayList<Point>();
@@ -860,6 +880,7 @@ public class Player extends outpost.sim.Player {
 	public ArrayList<Point> buildPathForDuos(Point source, Point destination) {
 		source = getGridPoint(source);
 		destination = getGridPoint(destination);
+
 		
 		HashMap<Point, Point> parent = new HashMap<Point, Point>();
 		ArrayList<Point> discover = new ArrayList<Point>();
@@ -1495,9 +1516,53 @@ public class Player extends outpost.sim.Player {
 		private Player getOuterType() {
 			return Player.this;
 		}
-		
-
 	}
+	
+	class BuildPathCacheItem {
+		Point a;
+		Point b;
+		@Override
+		public int hashCode() {
+			final int prime = 31;
+			int result = 1;
+			result = prime * result + getOuterType().hashCode();
+			result = prime * result + ((a == null) ? 0 : a.hashCode());
+			result = prime * result + ((b == null) ? 0 : b.hashCode());
+			return result;
+		}
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj)
+				return true;
+			if (obj == null)
+				return false;
+			if (getClass() != obj.getClass())
+				return false;
+			BuildPathCacheItem other = (BuildPathCacheItem) obj;
+			if (!getOuterType().equals(other.getOuterType()))
+				return false;
+			if (a == null) {
+				if (other.a != null)
+					return false;
+			} else if (!a.equals(other.a))
+				return false;
+			if (b == null) {
+				if (other.b != null)
+					return false;
+			} else if (!b.equals(other.b))
+				return false;
+			return true;
+		}
+		private Player getOuterType() {
+			return Player.this;
+		}
+		public BuildPathCacheItem(Point a, Point b) {
+			super();
+			this.a = a;
+			this.b = b;
+		}
+	}
+	
 	public enum PlayerStatistics {
 		STAY_IN_PLACE,
 		FOLLOWERS_NEIGHBORS,
