@@ -43,7 +43,7 @@ public class Player extends outpost.sim.Player {
 	ArrayList<Cell> board_scored;
 	Resource totalResourceNeeded;
 	Resource totalResourceGuaranteed;
-
+	Resource totalResourcePreviousTick;
 	
 	public Player(int id_in) {super(id_in);}
 
@@ -85,6 +85,7 @@ public class Player extends outpost.sim.Player {
 				playersOutposts.get(i).add(getGridPoint(pr));
 			}
 		}
+		
 		myOutposts = playersOutposts.get(this.id);
 		tickCounter++;
 		// clear grid and poinToOutposts
@@ -123,7 +124,9 @@ public class Player extends outpost.sim.Player {
 		
 		//preparation code for the resource strategy
 		next_moves = new ArrayList<Point>();
+		setMaxSearchLimit();
 		totalResourceNeeded = new Resource((myOutposts.size())*W_PARAM,(myOutposts.size())*L_PARAM);
+		totalResourcePreviousTick = totalResourceGuaranteed;
 		totalResourceGuaranteed = new Resource(0,0);
 		
 		// preparation code for the duo strategy
@@ -933,9 +936,10 @@ public class Player extends outpost.sim.Player {
 						continue;
 					}
 					
-					if (!isPointSafe(p, playerId)) {
+					if  (p.ownerlist.size() == 1 && p.ownerlist.get(0).x != this.id){
 						continue;
 					}
+
 					
 					discover.add(p);
 					parent.put(p, current);
@@ -971,7 +975,7 @@ public class Player extends outpost.sim.Player {
 		Point chosen_move = null;
 		//Point next_first_step = null;
 		//first find if we can move to an exclusive cell with most access to water
-		
+
 		chosen_move = getExclusiveBestCellAroundWater(outpostId);
 		//next_first_step = buildPathAvoidEnemy(myOutposts.get(outpostId), chosen_move).get(1);
 		if ((chosen_move==null)) //if no such exclusive cell is found, we search for alternates
@@ -991,7 +995,7 @@ public class Player extends outpost.sim.Player {
 
 		
 		try { //because sometimes throws null exception
-			Point nextPosition = nextPositionToGetToPositionAvoidEnemy(getGridPoint(myOutposts.get(outpostId)), new Point(chosen_move.x,chosen_move.y,false));
+			Point nextPosition = nextPositionToGetToPosition(getGridPoint(myOutposts.get(outpostId)), new Point(chosen_move.x,chosen_move.y,false));
 			movelist.add(new movePair(outpostId, pointToPair(nextPosition)));
 			Resource newResource = updateFieldOwnership(nextPosition, outpostId, id);
 			totalResourceGuaranteed.water += newResource.water;
@@ -1003,26 +1007,45 @@ public class Player extends outpost.sim.Player {
 		return true;
 	}
 	
-	int max_x=0, max_y=0;
+	
+	public int resourceOccupiedByPlayer(int playerId)
+	{
+		int total = 0;
+		for(Point p: playersOutposts.get(playerId))
+		{
+			for(Cell k: board_scored)
+			{
+				if (k.cell.x==p.x && k.cell.y==p.y)
+				{
+					total+= k.land+k.water;
+				}
+			}
+		}
+		return total;
+	}
+	
+	
+	
+	double allowed_dist = 0;
 	public void setMaxSearchLimit()
 	{
-		double phase_size = MAX_TICKS/3;
-		if(tickCounter > 2*phase_size)
+		double default_case = 0.5;
+		double numer=0, denom=0, choice=0;
+		for(int k=0; k<4; k++)
 		{
-			max_x = 100;
-			max_y = 100;
-		}
-		else if (tickCounter > phase_size && tickCounter < 2*phase_size)
-		{
-			max_x = 75;
-			max_y = 75;
-		}
-		else
-		{
-			max_x = 50;
-			max_y = 50;
+			double val = resourceOccupiedByPlayer(k);
+			if(k==this.id)
+				numer = val;
+			denom += val;
 		}
 		
+		double ratio = numer/denom; 
+		if (default_case > ratio)
+			choice = default_case;
+		else
+			choice = ratio;
+		
+		allowed_dist = 200 * choice;
 	}
 	
 	//Finding an exclusive cell which has the best water resource accessibility but also satisfies the land requirements
@@ -1031,7 +1054,6 @@ public class Player extends outpost.sim.Player {
 		Point closest_best = null;
 		int max_water = 0;
 		int min_dist = Integer.MAX_VALUE;
-		setMaxSearchLimit();
 		for (Cell check: board_scored)
 		{
 			if(getGridPoint(check.cell.x, check.cell.y).water)
@@ -1042,11 +1064,9 @@ public class Player extends outpost.sim.Player {
 				{
 					if(tooCloseToOtherOutpost(index, getGridPoint(check.cell)))
 						continue;
-					Point next_first_step = nextPositionToGetToPositionAvoidEnemy(myOutposts.get(index), getGridPoint(check.cell.x, check.cell.y));
-					if (next_first_step==null)
-						continue;
 					
 					boolean too_close = false;
+					
 					if(next_moves.size()>0){
 						for (int i=0; i < next_moves.size(); i++)
 							if(distance(getGridPoint(check.cell.x, check.cell.y), next_moves.get(i)) < RADIUS)
@@ -1057,9 +1077,17 @@ public class Player extends outpost.sim.Player {
 						}
 					if (too_close)
 						continue;
-
+					
+					if (distance(playersBase.get(this.id), getGridPoint(check.cell.x, check.cell.y)) > allowed_dist){
+						continue;
+					}
+					if(distance(playersBase.get(this.id), getGridPoint(check.cell.x, check.cell.y)) > 80) {
+						Point next_first_step = nextPositionToGetToPositionAvoidEnemy(myOutposts.get(index), getGridPoint(check.cell.x, check.cell.y));
+						if (next_first_step==null)
+							continue;
 					//if (check.cell.x>max_x || check.cell.y > max_y)
 						//continue;
+					}
 					
 					min_dist = distance(getGridPoint(check.cell), myOutposts.get(index));
 					max_water = check.water;
@@ -1096,7 +1124,6 @@ public class Player extends outpost.sim.Player {
 	public Point getAlternateResource(int index)
 	{
 		Point chosen_move = null;
-		Point next_first_step = null;
 		//check if there is water reachable by the end of this season
 		
 		
@@ -1105,17 +1132,15 @@ public class Player extends outpost.sim.Player {
 			//if not, go to the cell with the best water score which is closest to the outpost
 			chosen_move = getClosestBestCellAroundWater(index);
 		}
-		next_first_step = buildPathAvoidEnemy(myOutposts.get(index), chosen_move).get(1);
 
-		if((chosen_move!=null)||(next_first_step==null))
+		if(chosen_move!=null)
 			chosen_move = getSeasonBestRatioCellForOutpostId(index);
 		
-		next_first_step = buildPathAvoidEnemy(myOutposts.get(index), chosen_move).get(1);
 
 		//if we have access to water within this season
 		
 		//get the best ratio cell which has exclusive access
-		if ((chosen_move == null)||(next_first_step==null))
+		if (chosen_move == null)
 		{
 			chosen_move = getClosestBestCellAroundWater(index); //get the best cell around water without worrying about exclusivity
 		}
