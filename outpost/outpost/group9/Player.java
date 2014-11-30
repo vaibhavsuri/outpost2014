@@ -764,6 +764,24 @@ public class Player extends outpost.sim.Player {
 		return false;
 	}
 	
+	Point nextPositionToGetToPositionAvoidEnemy(Point source, Point destination) {
+		source = getGridPoint(source);
+		destination = getGridPoint(destination);
+		if (source.equals(destination)) {
+			return destination;
+		}
+		
+		ArrayList<Point> path = buildPathAvoidEnemy(source, destination);
+		
+//		System.out.printf("From %s to %s: move to %s\n", pointToString(source), pointToString(destination), pointToString(path.get(1)));
+//		System.out.println(path.get(1).water);
+//		System.out.println(getGridPoint(path.get(1)).water);
+		if (path!=null)
+			return path.get(1);
+		else
+			return null;
+	}
+	
 	
 	Point nextPositionToGetToPosition(Point source, Point destination) {
 		source = getGridPoint(source);
@@ -945,17 +963,86 @@ public class Player extends outpost.sim.Player {
 		return path;
 	}
 	
+	public ArrayList<Point> buildPathAvoidEnemy(Point source, Point destination) {
+		source = getGridPoint(source);
+		destination = getGridPoint(destination);
+		int playerId = this.id;
+		
+		HashMap<Point, Point> parent = new HashMap<Point, Point>();
+		ArrayList<Point> discover = new ArrayList<Point>();
+		Set<Point> visited = new HashSet<Point>();
+		discover.add(source);
+
+		while(true)
+		{
+			if(discover.size()!=0)
+			{
+				Point current = discover.remove(0);
+				visited.add(current);
+//				System.out.println(this.id+" analyzing: "+current.x+" "+current.y);
+				
+				if (equal(current, destination)) {
+//					System.out.println("Found destination");
+					break;
+				}
+				
+				ArrayList<Point> validNeighbors = neighborPoints(current);
+				Collections.shuffle(validNeighbors);
+				for (Point p: validNeighbors){
+					if (p.water) {
+						continue;
+					}
+					if (visited.contains(p)) {
+						continue;
+					}
+					if (discover.contains(p)) {
+						continue;
+					}
+					
+					if (!isPointSafe(p, playerId)) {
+						continue;
+					}
+					
+					discover.add(p);
+					parent.put(p, current);
+				}
+			}
+			else {
+				//System.out.printf("No Path from %s to %s\n", pointToString(source), pointToString(destination));
+				return null;			
+			}
+		}
+		
+		ArrayList<Point> path = new ArrayList<Point>();
+		Point p = destination;
+		while(true) {
+			path.add(p);
+			if (p.equals(source)) {
+				break;
+			}
+			p = parent.get(p);
+		}
+		Collections.reverse(path);
+		
+//		for (Point p2 : path) {
+//			System.out.println(pointToString(p2));
+//		}
+		
+		return path;
+	}
+	
 	//Method to find the best resource cell an outpost can move to 
 	public boolean addResourceOutpostToMovelist(ArrayList<movePair> movelist, int outpostId)
 	{
 		Point chosen_move = null;
+		//Point next_first_step = null;
 		//first find if we can move to an exclusive cell with most access to water
+		
 		chosen_move = getExclusiveBestCellAroundWater(outpostId);
-	
-		if (chosen_move==null) //if no such exclusive cell is found, we search for alternates
+		//next_first_step = buildPathAvoidEnemy(myOutposts.get(outpostId), chosen_move).get(1);
+		if ((chosen_move==null)) //if no such exclusive cell is found, we search for alternates
 		{
-			System.out.println("Could not find exclusive water");
-
+			System.out.println("Could not find exclusive cell");
 			chosen_move = getAlternateResource(outpostId);
 		}
 		
@@ -970,7 +1057,7 @@ public class Player extends outpost.sim.Player {
 
 		
 		try { //because sometimes throws null exception
-			Point nextPosition = nextPositionToGetToPosition(getGridPoint(myOutposts.get(outpostId)), new Point(chosen_move.x,chosen_move.y,false));
+			Point nextPosition = nextPositionToGetToPositionAvoidEnemy(getGridPoint(myOutposts.get(outpostId)), new Point(chosen_move.x,chosen_move.y,false));
 			movelist.add(new movePair(outpostId, pointToPair(nextPosition)));
 			Resource newResource = markFieldInRadius(nextPosition, outpostId, id);
 			totalResourceGuaranteed.water += newResource.water;
@@ -982,12 +1069,35 @@ public class Player extends outpost.sim.Player {
 		return true;
 	}
 	
+	int max_x=0, max_y=0;
+	public void setMaxSearchLimit()
+	{
+		double phase_size = MAX_TICKS/3;
+		if(tickCounter > 2*phase_size)
+		{
+			max_x = 100;
+			max_y = 100;
+		}
+		else if (tickCounter > phase_size && tickCounter < 2*phase_size)
+		{
+			max_x = 75;
+			max_y = 75;
+		}
+		else
+		{
+			max_x = 50;
+			max_y = 50;
+		}
+		
+	}
+	
 	//Finding an exclusive cell which has the best water resource accessibility but also satisfies the land requirements
 	public Point getExclusiveBestCellAroundWater(int index)
 	{
 		Point closest_best = null;
 		int max_water = 0;
 		int min_dist = Integer.MAX_VALUE;
+		setMaxSearchLimit();
 		for (Cell check: board_scored)
 		{
 			if(getGridPoint(check.cell.x, check.cell.y).water)
@@ -998,6 +1108,25 @@ public class Player extends outpost.sim.Player {
 				{
 					if(tooCloseToOtherOutpost(index, getGridPoint(check.cell)))
 						continue;
+					Point next_first_step = nextPositionToGetToPositionAvoidEnemy(myOutposts.get(index), getGridPoint(check.cell.x, check.cell.y));
+					if (next_first_step==null)
+						continue;
+					
+					boolean too_close = false;
+					if(next_moves.size()>0){
+						for (int i=0; i < next_moves.size(); i++)
+							if(distance(getGridPoint(check.cell.x, check.cell.y), next_moves.get(i)) < RADIUS)
+							{
+								too_close=true;
+								break;
+							}
+						}
+					if (too_close)
+						continue;
+
+					//if (check.cell.x>max_x || check.cell.y > max_y)
+						//continue;
+					
 					min_dist = distance(getGridPoint(check.cell), myOutposts.get(index));
 					max_water = check.water;
 					closest_best = getGridPoint(check.cell.x, check.cell.y);
@@ -1033,20 +1162,26 @@ public class Player extends outpost.sim.Player {
 	public Point getAlternateResource(int index)
 	{
 		Point chosen_move = null;
-		
+		Point next_first_step = null;
 		//check if there is water reachable by the end of this season
-		if (!waterWithinLimit(index))
+		
+		
+		if (!waterWithinLimit(index) || chosen_move==null)
 		{
 			//if not, go to the cell with the best water score which is closest to the outpost
 			chosen_move = getClosestBestCellAroundWater(index);
-			return chosen_move;
 		}
+		next_first_step = buildPathAvoidEnemy(myOutposts.get(index), chosen_move).get(1);
+
+		if((chosen_move!=null)||(next_first_step==null))
+			chosen_move = getSeasonBestRatioCellForOutpostId(index);
 		
+		next_first_step = buildPathAvoidEnemy(myOutposts.get(index), chosen_move).get(1);
+
 		//if we have access to water within this season
 		
 		//get the best ratio cell which has exclusive access
-		chosen_move = getSeasonBestRatioCellForOutpostId(index);
-		if (chosen_move == null)
+		if ((chosen_move == null)||(next_first_step==null))
 		{
 			chosen_move = getClosestBestCellAroundWater(index); //get the best cell around water without worrying about exclusivity
 		}
@@ -1291,8 +1426,12 @@ public class Player extends outpost.sim.Player {
 				{
 					if ((i==index) && (this.id==t))
 						continue;
-					
-					if(distance(p, playersOutposts.get(t).get(i)) < RADIUS)
+					double limitation;
+					if(this.id == t)
+						limitation = 2*RADIUS;
+					else
+						limitation = RADIUS;
+					if(distance(p, playersOutposts.get(t).get(i)) < limitation)
 					{
 						too_close=true;
 						break;
