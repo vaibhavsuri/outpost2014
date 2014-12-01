@@ -784,23 +784,23 @@ public class Player extends outpost.sim.Player {
 //		System.out.println(getGridPoint(path.get(1)).water);
 		return path.get(1);
 	}
-	HashMap<BuildPathCacheItem, List<Point>> cache = new HashMap<BuildPathCacheItem, List<Point>>();
+	HashMap<BuildPathCacheItem, List<Point>> buildPathCache = new HashMap<BuildPathCacheItem, List<Point>>();
 	public List<Point> buildPath(Point source, Point destination) {
 		source = getGridPoint(source);
 		destination = getGridPoint(destination);
 		
 		BuildPathCacheItem cacheItem = new BuildPathCacheItem(source, destination);
-		if (cache.containsKey(cacheItem)) {
-			List<Point> path = cache.get(cacheItem);
+		if (buildPathCache.containsKey(cacheItem)) {
+			List<Point> path = buildPathCache.get(cacheItem);
 			if (path.size() > 2) {
 				cacheItem.a = path.get(1);
-				cache.put(cacheItem, path.subList(1, path.size()));
+				buildPathCache.put(cacheItem, path.subList(1, path.size()));
 			}
 
 			return path;
 		}
-		if (cache.size() > 3000) {
-			cache.clear();
+		if (buildPathCache.size() > 3000) {
+			buildPathCache.clear();
 		}	
 		
 		HashMap<Point, Point> parent = new HashMap<Point, Point>();
@@ -856,7 +856,7 @@ public class Player extends outpost.sim.Player {
 		Collections.reverse(path);
 		
 		if (path.size() > 2) {
-			cache.put(new BuildPathCacheItem(path.get(1), destination), path.subList(1, path.size()));
+			buildPathCache.put(new BuildPathCacheItem(path.get(1), destination), path.subList(1, path.size()));
 		}
 		
 //		for (Point p2 : path) {
@@ -945,6 +945,8 @@ public class Player extends outpost.sim.Player {
 		}
 		Collections.reverse(path);
 		
+
+		
 //		for (Point p2 : path) {
 //			System.out.println(pointToString(p2));
 //		}
@@ -959,7 +961,7 @@ public class Player extends outpost.sim.Player {
 			return destination;
 		}
 		
-		ArrayList<Point> path = buildPathAvoidEnemy(source, destination);
+		List<Point> path = buildPathAvoidEnemy(source, destination);
 		
 //		System.out.printf("From %s to %s: move to %s\n", pointToString(source), pointToString(destination), pointToString(path.get(1)));
 //		System.out.println(path.get(1).water);
@@ -970,9 +972,42 @@ public class Player extends outpost.sim.Player {
 			return null;
 	}
 	
-	public ArrayList<Point> buildPathAvoidEnemy(Point source, Point destination) {
+	HashMap<BuildPathCacheItem, List<Point>> buildPathAvoidEnemyCache = new HashMap<BuildPathCacheItem, List<Point>>();
+	public List<Point> buildPathAvoidEnemy(Point source, Point destination) {
 		source = getGridPoint(source);
 		destination = getGridPoint(destination);
+		
+		BuildPathCacheItem cacheItem = new BuildPathCacheItem(source, destination);
+		if (buildPathAvoidEnemyCache.containsKey(cacheItem)) {
+			List<Point> path = buildPathAvoidEnemyCache.get(cacheItem);
+			boolean isSafe = true;
+			for(Point p : path) {
+				OutpostId owner = getClosestOutpostIdToPointForSafePoint(p);
+				ArrayList<OutpostId> owners = ownerGrid.get(p);
+				if (owner == null) {
+					if (owners != null && owners.size() != 0) {
+						// its a tie
+						isSafe=false;
+						break;
+					}
+				} else {
+					if (owner.ownerId != this.id) {
+						// owned by someone else
+						isSafe=false;
+						break;
+					}
+				}
+			}
+			if (path.size() > 2) {
+				cacheItem.a = path.get(1);
+				buildPathAvoidEnemyCache.put(cacheItem, path.subList(1, path.size()));
+			}
+
+			return path;
+		}
+		if (buildPathAvoidEnemyCache.size() > 3000) {
+			buildPathAvoidEnemyCache.clear();
+		}	
 		
 		HashMap<Point, Point> parent = new HashMap<Point, Point>();
 		ArrayList<Point> discover = new ArrayList<Point>();
@@ -1040,6 +1075,11 @@ public class Player extends outpost.sim.Player {
 			p = parent.get(p);
 		}
 		Collections.reverse(path);
+		
+		
+		if (path.size() > 2) {
+			buildPathAvoidEnemyCache.put(new BuildPathCacheItem(path.get(1), destination), path.subList(1, path.size()));
+		}
 		
 //		for (Point p2 : path) {
 //			System.out.println(pointToString(p2));
@@ -1154,7 +1194,7 @@ public class Player extends outpost.sim.Player {
 						continue;
 					}
 					if(distance(playersBase.get(this.id), getGridPoint(check.cell.x, check.cell.y)) > 80) {
-						Point next_first_step = nextPositionToGetToPositionAvoidEnemy(myOutposts.get(index), getGridPoint(check.cell.x, check.cell.y));
+						Point next_first_step = nextPositionToGetToPosition(myOutposts.get(index), getGridPoint(check.cell.x, check.cell.y));
 						if (next_first_step==null)
 							continue;
 					//if (check.cell.x>max_x || check.cell.y > max_y)
