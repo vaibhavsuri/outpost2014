@@ -387,7 +387,7 @@ public class Player extends outpost.sim.Player {
 		Point leaderNextPosition = nextPositionToGetToPositionAvoidOccupied(leader, target);
 		Point followerNextPosition = leader;
 		
-		if (distance(leader, myBase) > distance(target, myBase)) {
+		if (distance(leader, myBase) > distance(target, myBase) && distance(leader, myBase) < 100) {
 			alreadySelectedDuosTargets.remove(target);
 		}
 		
@@ -401,8 +401,24 @@ public class Player extends outpost.sim.Player {
 		do {
 			if (hasWeakSupplyLine(leaderNextPosition, id)) {
 				if (waitingToMove.contains(target)) {
-					// risk going to same point anyway then
-					break;
+					boolean isNotWaitingForANeighbor = true;
+					ArrayList<Point> validNeighbors = neighborPoints(follower);
+					for (Point p: validNeighbors){
+						if (p.water) {
+							continue;
+						}
+
+						if (waitingToMove.contains(p)) {
+							isNotWaitingForANeighbor = false;
+							break;
+						}
+					}
+					
+					if (isNotWaitingForANeighbor) {
+						// risk going to same point anyway then
+						break;
+					}
+
 				}
 				waitingToMove.add(target);
 				
@@ -1020,9 +1036,8 @@ public class Player extends outpost.sim.Player {
 		Point chosen_move = null;
 		//Point next_first_step = null;
 		//first find if we can move to an exclusive cell with most access to water
-
-		chosen_move = getExclusiveBestCellAroundWater(outpostId);
 		//next_first_step = buildPathAvoidEnemy(myOutposts.get(outpostId), chosen_move).get(1);
+		chosen_move = getExclusiveBestCellAroundWater(outpostId);
 		if (chosen_move == null) //if no such exclusive cell is found, we search for alternates
 		{
 			System.out.println("Could not find exclusive cell");
