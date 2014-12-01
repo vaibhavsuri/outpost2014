@@ -38,6 +38,18 @@ public class Player extends outpost.sim.Player {
 	Set<Point> duosPointsOnEnemyBase = new HashSet<Point>();
 	Set<Point> waitingToMove = new HashSet<Point>();
 	
+	//avoidEnemy stuff
+	class PathEnds
+	{
+		Point source, destination;
+		public PathEnds(Point A, Point B)
+		{
+			source = A;
+			destination = B;
+		}
+	}
+	ArrayList<PathEnds> avoidPathsThisSeason;
+	
 	// resource strategy stuff
 	ArrayList<Point> next_moves;
 	int my_land, my_water;
@@ -88,6 +100,12 @@ public class Player extends outpost.sim.Player {
 		
 		myOutposts = playersOutposts.get(this.id);
 		tickCounter++;
+		if (tickCounter % 10 == 0)
+		{
+			avoidPathsThisSeason = new ArrayList<PathEnds>();
+		}
+
+		
 		// clear grid and poinToOutposts
 		for (int i = 0; i < SIDE_SIZE * SIDE_SIZE; i++) {
 			grid[i].ownerlist.clear();
@@ -972,10 +990,35 @@ public class Player extends outpost.sim.Player {
 			return null;
 	}
 	
+	public boolean closeTo(Point A, Point B)
+	{
+		int limit = 2*RADIUS;
+		if (distance(A, B) < limit)
+			return true;
+		else
+			return false;
+	}
+	
+	public boolean avoidPathBasedOnPast(Point source, Point destination)
+	{
+		for (PathEnds k: avoidPathsThisSeason)
+		{
+			if (closeTo(destination, k.destination) && (closeTo(source, k.source)))
+					return true;
+		}
+		return false;
+	}
+
+	
 	HashMap<BuildPathCacheItem, List<Point>> buildPathAvoidEnemyCache = new HashMap<BuildPathCacheItem, List<Point>>();
 	public List<Point> buildPathAvoidEnemy(Point source, Point destination) {
 		source = getGridPoint(source);
 		destination = getGridPoint(destination);
+		
+		if(avoidPathBasedOnPast(source, destination)){
+			return null;
+		}
+		
 		
 		BuildPathCacheItem cacheItem = new BuildPathCacheItem(source, destination);
 		if (buildPathAvoidEnemyCache.containsKey(cacheItem)) {
@@ -1061,6 +1104,7 @@ public class Player extends outpost.sim.Player {
 			}
 			else {
 				//System.out.printf("No Path from %s to %s\n", pointToString(source), pointToString(destination));
+				avoidPathsThisSeason.add(new PathEnds(source, destination));
 				return null;			
 			}
 		}
