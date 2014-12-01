@@ -263,7 +263,7 @@ public class Player extends outpost.sim.Player {
 			}
 			
 			if (distance(myBase, enemy) > 70) {
-				ArrayList<Point> path = buildPath(myBase, enemy);
+				List<Point> path = buildPath(myBase, enemy);
 				if (hasWeakSupplyLine(path.get(path.size()-1), id)) {
 					continue;
 				}
@@ -777,17 +777,31 @@ public class Player extends outpost.sim.Player {
 			return destination;
 		}
 		
-		ArrayList<Point> path = buildPath(source, destination);
+		List<Point> path = buildPath(source, destination);
 		
 //		System.out.printf("From %s to %s: move to %s\n", pointToString(source), pointToString(destination), pointToString(path.get(1)));
 //		System.out.println(path.get(1).water);
 //		System.out.println(getGridPoint(path.get(1)).water);
 		return path.get(1);
 	}
-	
-	public ArrayList<Point> buildPath(Point source, Point destination) {
+	HashMap<BuildPathCacheItem, List<Point>> cache = new HashMap<BuildPathCacheItem, List<Point>>();
+	public List<Point> buildPath(Point source, Point destination) {
 		source = getGridPoint(source);
 		destination = getGridPoint(destination);
+		
+		BuildPathCacheItem cacheItem = new BuildPathCacheItem(source, destination);
+		if (cache.containsKey(cacheItem)) {
+			List<Point> path = cache.get(cacheItem);
+			if (path.size() > 2) {
+				cacheItem.a = path.get(1);
+				cache.put(cacheItem, path.subList(1, path.size()));
+			}
+
+			return path;
+		}
+		if (cache.size() > 3000) {
+			cache.clear();
+		}	
 		
 		HashMap<Point, Point> parent = new HashMap<Point, Point>();
 		ArrayList<Point> discover = new ArrayList<Point>();
@@ -841,6 +855,10 @@ public class Player extends outpost.sim.Player {
 		}
 		Collections.reverse(path);
 		
+		if (path.size() > 2) {
+			cache.put(new BuildPathCacheItem(path.get(1), destination), path.subList(1, path.size()));
+		}
+		
 //		for (Point p2 : path) {
 //			System.out.println(pointToString(p2));
 //		}
@@ -855,7 +873,7 @@ public class Player extends outpost.sim.Player {
 			return destination;
 		}
 		
-		ArrayList<Point> path = buildPathAvoidOccupied(source, destination);
+		List<Point> path = buildPathAvoidOccupied(source, destination);
 		if (path== null) {
 			path = buildPath(source, destination);
 		}
@@ -1667,6 +1685,51 @@ public class Player extends outpost.sim.Player {
 		}
 		private Player getOuterType() {
 			return Player.this;
+		}
+	}
+	
+	class BuildPathCacheItem {
+		Point a;
+		Point b;
+		@Override
+		public int hashCode() {
+			final int prime = 31;
+			int result = 1;
+			result = prime * result + getOuterType().hashCode();
+			result = prime * result + ((a == null) ? 0 : a.hashCode());
+			result = prime * result + ((b == null) ? 0 : b.hashCode());
+			return result;
+		}
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj)
+				return true;
+			if (obj == null)
+				return false;
+			if (getClass() != obj.getClass())
+				return false;
+			BuildPathCacheItem other = (BuildPathCacheItem) obj;
+			if (!getOuterType().equals(other.getOuterType()))
+				return false;
+			if (a == null) {
+				if (other.a != null)
+					return false;
+			} else if (!a.equals(other.a))
+				return false;
+			if (b == null) {
+				if (other.b != null)
+					return false;
+			} else if (!b.equals(other.b))
+				return false;
+			return true;
+		}
+		private Player getOuterType() {
+			return Player.this;
+		}
+		public BuildPathCacheItem(Point a, Point b) {
+			super();
+			this.a = a;
+			this.b = b;
 		}
 	}
 	
