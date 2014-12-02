@@ -48,7 +48,7 @@ public class Player extends outpost.sim.Player {
 			destination = B;
 		}
 	}
-	ArrayList<PathEnds> avoidPathsThisSeason;
+	ArrayList<PathEnds> avoidPathsThisSeason = new ArrayList<PathEnds>();
 	
 	// resource strategy stuff
 	ArrayList<Point> next_moves;
@@ -57,6 +57,7 @@ public class Player extends outpost.sim.Player {
 	ArrayList<Cell> board_scored;
 	Resource totalResourceNeeded;
 	Resource totalResourceGuaranteed;
+	HashMap<Integer, Point> Targets = new HashMap<Integer, Point>();
 	
 	public Player(int id_in) {super(id_in);}
 
@@ -140,7 +141,7 @@ public class Player extends outpost.sim.Player {
 		}
 		
 		
-		System.out.printf("---- New tick -----\n");
+		System.out.println("---- New tick -----\n"+tickCounter);
 		ArrayList<movePair> movelist = new ArrayList<movePair>();
 		
 		//preparation code for the resource strategy
@@ -247,6 +248,7 @@ public class Player extends outpost.sim.Player {
 				currentOutpostId -= 2;
 			} else if (totalResourceGuaranteed.isMoreThan(totalResourceNeeded)) {
 				// Duo strategy
+				System.out.println("Trying duos strategy "+currentOutpostId);
 				outpostsForDuoStrategy.add(currentOutpostId);
 			} else {	
 				// Resource strategy
@@ -1016,10 +1018,12 @@ public class Player extends outpost.sim.Player {
 	
 	public boolean avoidPathBasedOnPast(Point source, Point destination)
 	{
+		if(avoidPathsThisSeason.size()>0){
 		for (PathEnds k: avoidPathsThisSeason)
 		{
 			if (closeTo(destination, k.destination) && (closeTo(source, k.source)))
 					return true;
+		}
 		}
 		return false;
 	}
@@ -1149,17 +1153,35 @@ public class Player extends outpost.sim.Player {
 	public boolean addResourceOutpostToMovelist(ArrayList<movePair> movelist, int outpostId)
 	{
 		Point chosen_move = null;
+		boolean storedMove = false;
+		if (Targets.containsKey(outpostId))
+		{
+			Point check_move = Targets.get(outpostId);
+			if (nextPositionToGetToPositionAvoidEnemy(myOutposts.get(outpostId), check_move) != null)
+			{
+				chosen_move = check_move;
+				storedMove = true;
+			}
+			else
+				Targets.remove(outpostId);
+		}
 		//Point next_first_step = null;
 		//first find if we can move to an exclusive cell with most access to water
 		//next_first_step = buildPathAvoidEnemy(myOutposts.get(outpostId), chosen_move).get(1);
-		chosen_move = getExclusiveBestCellAroundWater(outpostId);
-		if (chosen_move == null) //if no such exclusive cell is found, we search for alternates
+		
+		if (!storedMove) 
 		{
-			System.out.println("Could not find exclusive cell");
-			chosen_move = getAlternateResource(outpostId);
-			if (chosen_move == null) {
-				return false;
+			chosen_move = getExclusiveBestCellAroundWater(outpostId);
+			if (chosen_move == null) //if no such exclusive cell is found, we search for alternates
+			{
+				System.out.println("Could not find exclusive cell");
+				chosen_move = getAlternateResource(outpostId);
+				if (chosen_move == null) 
+				{
+					return false;
+				}
 			}
+			Targets.put(outpostId, chosen_move);
 		}
 		
 		next_moves.add(chosen_move);
@@ -1167,6 +1189,7 @@ public class Player extends outpost.sim.Player {
 		
 		try { //because sometimes throws null exception
 			Point nextPosition = nextPositionToGetToPosition(getGridPoint(myOutposts.get(outpostId)), getGridPoint(chosen_move));
+			System.out.println("Resource ID: "+outpostId+" chose target = "+chosen_move.x+", "+chosen_move.y+". Next Position: "+nextPosition.x+", "+nextPosition.y);
 			movelist.add(new movePair(outpostId, pointToPair(nextPosition)));
 			Resource newResource = updateFieldOwnership(new OutpostId(nextPosition, outpostId, id));
 			totalResourceGuaranteed.water += newResource.water;
@@ -1241,7 +1264,7 @@ public class Player extends outpost.sim.Player {
 					for (int i=0; i < prev_moves.size(); i++) {
 						if(i<index)
 						{
-							if(check.cell.x==prev_moves.get(i).x && check.cell.y==prev_moves.get(i).y)
+							if(distance(getGridPoint(check.cell.x, check.cell.y), prev_moves.get(i)) < RADIUS)
 							{
 								//System.out.println("ID= "+i+" already has target wanted by ID= "+index);
 								too_close=true;
@@ -1285,6 +1308,7 @@ public class Player extends outpost.sim.Player {
 				}
 			}
 		}
+		System.out.println("ID "+index+" best cell water: "+max_water+" at dist "+min_dist);
 		return closest_best;
 	}
 	
@@ -1576,6 +1600,8 @@ public class Player extends outpost.sim.Player {
 					if ((i==index) && (this.id==t))
 						continue;
 					double limitation;
+//					if(this.id == t)
+//						continue;
 					if(this.id == t)
 						limitation = 2*RADIUS;
 					else
