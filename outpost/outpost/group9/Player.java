@@ -273,31 +273,19 @@ public class Player extends outpost.sim.Player {
 			allDuos.add(new Duo(outpostId1, outpostId2));
 		}
 		
-		SortedSet<Point> enemiesByDistToMyBase = getEnemiesByDistanceToPoint(myBase);
-		for (Point enemy : enemiesByDistToMyBase) {
-			SortedSet<Duo> duos = getDuosByDistanceToPoint(getGridPoint(enemy));
+		SortedSet<Point> enemiesCloseToMyBase = getEnemiesCloserThanDist(myBase, 40);
+		for (Point enemy : enemiesCloseToMyBase) {
+			SortedSet<Duo> duos = getDuosByDistanceToPoint(myBase);
 			if (duos.size() == 0) {
 				break;
 			}
 			
-//			if (distance(myBase, enemy) > 70) {
-//				List<Point> path = buildPath(myBase, enemy);
-//				if (hasWeakSupplyLine(path.get(path.size()-1), id)) {
-//					continue;
-//				}
-//			}
-			
 			for (Duo duo : duos) {
-				boolean tooFar = distance(myOutposts.get(duo.p1), enemy) > TOO_CLOSE;
-				boolean moreEnemiesThanDuos = duos.size() < enemiesByDistToMyBase.size();
-				if (!(tooFar && moreEnemiesThanDuos) || enemiesInMySide.size() != 0) {
-					addDuoToMovelist(movelist, duo, getGridPoint(enemy));
-					break;
-				}
+				addDuoToMovelist(movelist, duo, getGridPoint(enemy));
+				break;
 			}
 		}
-
-		// Second pass: send to remaining targets or to collect resources.
+		
 		for(Duo duo : allDuos) {
 			if (duosAlreadyWithTarget.contains(duo)) {
 				continue;
@@ -457,33 +445,7 @@ public class Player extends outpost.sim.Player {
 					break recoverdowhile;
 				}
 					
-					
-				ArrayList<Point> validNeighbors = neighborPoints(follower);
-				for (Point p: validNeighbors){
-					if (p.water) {
-						continue;
-					}
-
-					leaderNextPosition = follower;
-					followerNextPosition = p;
-					undoFieldOwnership(previousLeaderTry);
-					undoFieldOwnership(previousFollowerTry);
-					previousLeaderTry = new OutpostId(leaderNextPosition, leaderId, id);
-					previousFollowerTry = new OutpostId(followerNextPosition, followerId, id);
-					updateFieldOwnership(previousLeaderTry);
-					updateFieldOwnership(previousFollowerTry);
-					if (!hasWeakSupplyLine(leaderNextPosition, id)) {
-						break;
-					}
-				}
-				if (!hasWeakSupplyLine(leaderNextPosition, id)) {
-//					System.out.printf("Success by checking follower's neighbors\n");
-					PlayerStatistics.FOLLOWERS_NEIGHBORS.counter++;
-					break recoverdowhile;
-				}
-				
-				
-				validNeighbors = neighborPoints(leader);
+				ArrayList<Point> validNeighbors = neighborPoints(leader);
 				for (Point p: validNeighbors){
 					if (p.water) {
 						continue;
@@ -504,6 +466,30 @@ public class Player extends outpost.sim.Player {
 				if (!hasWeakSupplyLine(leaderNextPosition, id)) {
 //					System.out.printf("Success by checking leader's neighbors\n");
 					PlayerStatistics.LEADER_NEIGHBORS.counter++;
+					break recoverdowhile;
+				}
+				
+				validNeighbors = neighborPoints(follower);
+				for (Point p: validNeighbors){
+					if (p.water) {
+						continue;
+					}
+
+					leaderNextPosition = follower;
+					followerNextPosition = p;
+					undoFieldOwnership(previousLeaderTry);
+					undoFieldOwnership(previousFollowerTry);
+					previousLeaderTry = new OutpostId(leaderNextPosition, leaderId, id);
+					previousFollowerTry = new OutpostId(followerNextPosition, followerId, id);
+					updateFieldOwnership(previousLeaderTry);
+					updateFieldOwnership(previousFollowerTry);
+					if (!hasWeakSupplyLine(leaderNextPosition, id)) {
+						break;
+					}
+				}
+				if (!hasWeakSupplyLine(leaderNextPosition, id)) {
+//					System.out.printf("Success by checking follower's neighbors\n");
+					PlayerStatistics.FOLLOWERS_NEIGHBORS.counter++;
 					break recoverdowhile;
 				}
 				
@@ -802,6 +788,7 @@ public class Player extends outpost.sim.Player {
 //		System.out.println(getGridPoint(path.get(1)).water);
 		return path.get(1);
 	}
+	
 	HashMap<BuildPathCacheItem, List<Point>> buildPathCache = new HashMap<BuildPathCacheItem, List<Point>>();
 	public List<Point> buildPath(Point source, Point destination) {
 		source = getGridPoint(source);
@@ -899,10 +886,34 @@ public class Player extends outpost.sim.Player {
 		return path.get(1);
 	}
 	
-	public ArrayList<Point> buildPathAvoidOccupied(Point source, Point destination) {
+	HashMap<BuildPathCacheItem, List<Point>> buildPathAvoidOccupiedCache = new HashMap<BuildPathCacheItem, List<Point>>();
+	public List<Point> buildPathAvoidOccupied(Point source, Point destination) {
 		source = getGridPoint(source);
 		destination = getGridPoint(destination);
 
+		BuildPathCacheItem cacheItem = new BuildPathCacheItem(source, destination);
+		if (buildPathAvoidOccupiedCache.containsKey(cacheItem)) {
+			List<Point> path = buildPathAvoidOccupiedCache.get(cacheItem);
+			boolean isOccupied = false;
+			for(Point p : path) {
+				if(!p.equals(destination) && pointToOutposts.get(p).size() != 0) {
+					isOccupied = true;
+					break;
+				}
+			}
+			if (!isOccupied) {
+				if (path.size() > 2) {
+					cacheItem.a = path.get(1);
+					buildPathAvoidOccupiedCache.put(cacheItem, path.subList(1, path.size()));
+				}
+
+				return path;
+			}
+		}
+		if (buildPathAvoidOccupiedCache.size() > 3000) {
+			buildPathAvoidOccupiedCache.clear();
+		}	
+		
 		
 		HashMap<Point, Point> parent = new HashMap<Point, Point>();
 		ArrayList<Point> discover = new ArrayList<Point>();
@@ -960,7 +971,10 @@ public class Player extends outpost.sim.Player {
 		}
 		Collections.reverse(path);
 		
-
+		buildPathAvoidOccupiedCache.put(new BuildPathCacheItem(source, destination), path);
+		if (path.size() > 2) {
+			buildPathAvoidOccupiedCache.put(new BuildPathCacheItem(path.get(1), destination), path.subList(1, path.size()));
+		}
 		
 //		for (Point p2 : path) {
 //			System.out.println(pointToString(p2));
@@ -1038,12 +1052,14 @@ public class Player extends outpost.sim.Player {
 					}
 				}
 			}
-			if (path.size() > 2) {
-				cacheItem.a = path.get(1);
-				buildPathAvoidEnemyCache.put(cacheItem, path.subList(1, path.size()));
-			}
+			if (isSafe) {
+				if (path.size() > 2) {
+					cacheItem.a = path.get(1);
+					buildPathAvoidEnemyCache.put(cacheItem, path.subList(1, path.size()));
+				}
 
-			return path;
+				return path;
+			}
 		}
 		if (buildPathAvoidEnemyCache.size() > 3000) {
 			buildPathAvoidEnemyCache.clear();
@@ -1117,14 +1133,10 @@ public class Player extends outpost.sim.Player {
 		}
 		Collections.reverse(path);
 		
-		
+		buildPathAvoidEnemyCache.put(new BuildPathCacheItem(source, destination), path);
 		if (path.size() > 2) {
 			buildPathAvoidEnemyCache.put(new BuildPathCacheItem(path.get(1), destination), path.subList(1, path.size()));
 		}
-		
-//		for (Point p2 : path) {
-//			System.out.println(pointToString(p2));
-//		}
 		
 		return path;
 	}
