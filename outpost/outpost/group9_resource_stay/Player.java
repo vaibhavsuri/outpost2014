@@ -1359,11 +1359,13 @@ public class Player extends outpost.sim.Player {
 			chosen_move = getClosestBestCellAroundWater(index); //get the best cell around water without worrying about exclusivity
 		}
 		
-		 if (chosen_move.equals(myOutposts.get(index))) {
-			if (clustered(index)) //if there is a chance of clustering, move towards the an unoccupied resource cell
-				chosen_move = getUnoccupiedResourceForOutpostId(index);
-		 }
-		 
+		if(chosen_move!=null){
+			 if (chosen_move.equals(myOutposts.get(index))) {
+				if (clustered(index)) //if there is a chance of clustering, move towards the an unoccupied resource cell
+					chosen_move = getUnoccupiedResourceForOutpostId(index);
+			 }
+			}
+		
 		 if (chosen_move == null) //if couldn't find unoccupied resource cell, move to the farthest outpost from base
 			 chosen_move = farthestOutpost(myOutposts);
 		 
@@ -1600,8 +1602,7 @@ public class Player extends outpost.sim.Player {
 					if ((i==index) && (this.id==t))
 						continue;
 					double limitation;
-//					if(this.id == t)
-//						continue;
+
 					if(this.id == t)
 						limitation = 2*RADIUS;
 					else
