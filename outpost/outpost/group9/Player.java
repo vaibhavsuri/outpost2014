@@ -52,6 +52,7 @@ public class Player extends outpost.sim.Player {
 	
 	// resource strategy stuff
 	ArrayList<Point> next_moves;
+	ArrayList<Point> prev_moves = new ArrayList<Point>();
 	int my_land, my_water;
 	ArrayList<Cell> board_scored;
 	Resource totalResourceNeeded;
@@ -255,6 +256,9 @@ public class Player extends outpost.sim.Player {
 				}
 			}
 		}
+		prev_moves.clear();
+		prev_moves.addAll(next_moves);
+		Collections.reverse(prev_moves);
 		
 		// Duo strategy code:
 		// Specify the partners
@@ -1233,21 +1237,42 @@ public class Player extends outpost.sim.Player {
 						continue;
 					
 					boolean too_close = false;
-					for (int i=0; i < next_moves.size(); i++) {
-						if(distance(getGridPoint(check.cell.x, check.cell.y), next_moves.get(i)) < RADIUS)
+					if(prev_moves.size()>0){
+					for (int i=0; i < prev_moves.size(); i++) {
+						if(i<index)
 						{
-							too_close=true;
-							break;
+							if(check.cell.x==prev_moves.get(i).x && check.cell.y==prev_moves.get(i).y)
+							{
+								//System.out.println("ID= "+i+" already has target wanted by ID= "+index);
+								too_close=true;
+								break;
+							}
 						}
+					}
+					
 					}
 					if (too_close)
 						continue;
 					
+					too_close = false;
+					for (int i=0; i < next_moves.size(); i++) {
+							if(distance(getGridPoint(check.cell.x, check.cell.y), next_moves.get(i)) < RADIUS)
+							{
+								//System.out.println("ID= "+i+" already has target wanted by ID= "+index);
+								too_close=true;
+								break;
+							}
+					}
+					
+					if (too_close)
+						continue;
+					
+
 					if (distance(playersBase.get(this.id), getGridPoint(check.cell.x, check.cell.y)) > allowed_dist){
 						continue;
 					}
 					if(distance(playersBase.get(this.id), getGridPoint(check.cell.x, check.cell.y)) > 80) {
-						Point next_first_step = nextPositionToGetToPosition(myOutposts.get(index), getGridPoint(check.cell.x, check.cell.y));
+						Point next_first_step = nextPositionToGetToPositionAvoidEnemy(myOutposts.get(index), getGridPoint(check.cell.x, check.cell.y));
 						if (next_first_step==null)
 							continue;
 					//if (check.cell.x>max_x || check.cell.y > max_y)
