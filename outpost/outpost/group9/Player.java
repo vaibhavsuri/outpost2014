@@ -280,12 +280,12 @@ public class Player extends outpost.sim.Player {
 				break;
 			}
 			
-			if (distance(myBase, enemy) > 70) {
-				List<Point> path = buildPath(myBase, enemy);
-				if (hasWeakSupplyLine(path.get(path.size()-1), id)) {
-					continue;
-				}
-			}
+//			if (distance(myBase, enemy) > 70) {
+//				List<Point> path = buildPath(myBase, enemy);
+//				if (hasWeakSupplyLine(path.get(path.size()-1), id)) {
+//					continue;
+//				}
+//			}
 			
 			for (Duo duo : duos) {
 				boolean tooFar = distance(myOutposts.get(duo.p1), enemy) > TOO_CLOSE;
@@ -873,13 +873,10 @@ public class Player extends outpost.sim.Player {
 		}
 		Collections.reverse(path);
 		
+		buildPathCache.put(new BuildPathCacheItem(source, destination), path);
 		if (path.size() > 2) {
 			buildPathCache.put(new BuildPathCacheItem(path.get(1), destination), path.subList(1, path.size()));
 		}
-		
-//		for (Point p2 : path) {
-//			System.out.println(pointToString(p2));
-//		}
 		
 		return path;
 	}
@@ -1153,9 +1150,9 @@ public class Player extends outpost.sim.Player {
 
 		
 		try { //because sometimes throws null exception
-			Point nextPosition = nextPositionToGetToPosition(getGridPoint(myOutposts.get(outpostId)), new Point(chosen_move.x,chosen_move.y,false));
+			Point nextPosition = nextPositionToGetToPosition(getGridPoint(myOutposts.get(outpostId)), getGridPoint(chosen_move));
 			movelist.add(new movePair(outpostId, pointToPair(nextPosition)));
-			Resource newResource = updateFieldOwnership( new OutpostId(nextPosition, outpostId, id));
+			Resource newResource = updateFieldOwnership(new OutpostId(nextPosition, outpostId, id));
 			totalResourceGuaranteed.water += newResource.water;
 			totalResourceGuaranteed.land += newResource.land;
 		} catch(Exception E){
