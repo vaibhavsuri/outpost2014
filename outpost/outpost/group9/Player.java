@@ -1157,10 +1157,13 @@ public class Player extends outpost.sim.Player {
 		if (Targets.containsKey(outpostId))
 		{
 			Point check_move = Targets.get(outpostId);
-			if (nextPositionToGetToPositionAvoidEnemy(myOutposts.get(outpostId), check_move) != null)
-			{
-				chosen_move = check_move;
-				storedMove = true;
+			if(check_move.x != myOutposts.get(outpostId).x && check_move.y != myOutposts.get(outpostId).y)
+			{	
+				if (nextPositionToGetToPositionAvoidEnemy(myOutposts.get(outpostId), check_move) != null)
+				{
+					chosen_move = check_move;
+					storedMove = true;
+				}
 			}
 			else
 				Targets.remove(outpostId);
