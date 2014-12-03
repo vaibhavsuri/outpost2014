@@ -237,6 +237,11 @@ public class Player extends outpost.sim.Player {
 			if (duosPointsOnEnemyBase.contains(outpost)) {
 				continue;
 			}
+			if (myOutposts.size() > 6 && currentOutpostId == 1) {
+				outpostsForDuoStrategy.add(1);
+				outpostsForDuoStrategy.add(0);
+				break;
+			}
 			
 			if (currentOutpostId == myOutposts.size() - 1 && enemiesInMySide.size() != 0 && currentOutpostId -2 >= 0) {
 				// protect base strategy
@@ -1196,7 +1201,7 @@ public class Player extends outpost.sim.Player {
 		
 		try { //because sometimes throws null exception
 			Point nextPosition = nextPositionToGetToPosition(getGridPoint(myOutposts.get(outpostId)), getGridPoint(chosen_move));
-			System.out.println("Resource ID: "+outpostId+" chose target = "+chosen_move.x+", "+chosen_move.y+". Next Position: "+nextPosition.x+", "+nextPosition.y);
+//			System.out.println("Resource ID: "+outpostId+" chose target = "+chosen_move.x+", "+chosen_move.y+". Next Position: "+nextPosition.x+", "+nextPosition.y);
 			movelist.add(new movePair(outpostId, pointToPair(nextPosition)));
 			Resource newResource = updateFieldOwnership(new OutpostId(nextPosition, outpostId, id));
 			totalResourceGuaranteed.water += newResource.water;
