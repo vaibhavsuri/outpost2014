@@ -36,9 +36,13 @@ public class Cell {
 		this.cellState = cell.cellState;
 		this.cellOwnerId = cell.cellOwnerId;
 		this.cellOwnerDistance = cell.cellOwnerDistance;
+		
 		this.numOutposts = new int[Consts.numPlayers];
 		System.arraycopy(cell.numOutposts, 0, this.numOutposts, 0, cell.numOutposts.length);
+		
+		this.pathDistanceToHome = new int[Consts.numPlayers];
 		System.arraycopy(cell.pathDistanceToHome, 0, this.pathDistanceToHome, 0, cell.pathDistanceToHome.length);
+		
 		this.nearestLand = new Loc(cell.nearestLand);
 		this.numLandCellsNearby = cell.numLandCellsNearby;
 		this.numWaterCellsNearby = cell.numWaterCellsNearby;
@@ -78,6 +82,10 @@ public class Cell {
 	
 	public double getOwnerDistance() {
 		return cellOwnerDistance;
+	}
+	
+	public boolean isPassableFor(int id) {
+		return isLand() && (isNeutral() || (isOwned() && getOwnerId() == id));
 	}
 	
 	public void setNeutral() {

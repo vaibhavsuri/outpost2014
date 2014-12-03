@@ -46,6 +46,8 @@ public class Board {
 	private double avgSupportableOutpostsPerCellWithSupport;
 	private Cell[][] cells;
 	private boolean landGrid[][];
+	private boolean landGridUL[][];
+	private boolean passableGrid[][];
 	private ArrayList<ArrayList<Loc>> outposts;
 	private ArrayList<PlayerSummary> playerSummaries;
 	
@@ -74,6 +76,8 @@ public class Board {
 		ticks = 0;
 		cells = new Cell[dimension][dimension];
 		landGrid = new boolean[dimension][dimension];
+		landGridUL = new boolean[dimension][dimension];
+		passableGrid = new boolean[dimension][dimension];
 		outposts = new ArrayList<ArrayList<Loc>>();
 		playerSummaries = new ArrayList<PlayerSummary>();
 		
@@ -101,6 +105,9 @@ public class Board {
 		for (int x = 0; x < dimension; x++) {
 			for (int y = 0; y < dimension; y++) {
 				Cell cell = cells[x][y];
+				
+				if (x < dimension - 1 && y < dimension - 1)
+					landGridUL[x][y] = cells[x][y].isLand() && cells[x+1][y].isLand() && cells[x][y+1].isLand() && cells[x+1][y+1].isLand();
 				
 				cell.setNearestLand(findNearestLand(x, y));
 				cell.setNearestWater(findNearestWater(x, y));
@@ -171,6 +178,8 @@ public class Board {
 		avgSupportableOutpostsPerCellWithSupport = board.avgSupportableOutpostsPerCellWithSupport; 
 		cells = new Cell[dimension][dimension];
 		landGrid = board.landGrid;
+		landGridUL = board.landGridUL;
+		passableGrid = new boolean[dimension][dimension];
 		outposts = new ArrayList<ArrayList<Loc>>();
 		playerSummaries = new ArrayList<PlayerSummary>();
 		
@@ -190,8 +199,8 @@ public class Board {
 		}
 	}
 	
-	public void update(ArrayList<ArrayList<Pair>> simOutpostList) {
-		if (simOutpostList.size() != Consts.numPlayers)
+	public void update(ArrayList<ArrayList<Loc>> outpostList) {
+		if (outpostList.size() != Consts.numPlayers)
 			System.err.println("Attempting to update board with wrong size list of player outposts");
 		
 		ticks++;
@@ -207,9 +216,7 @@ public class Board {
 			outposts.get(id).clear();
 			playerSummaries.get(id).reset();
 			
-			for (Pair pair : simOutpostList.get(id)) {
-				Loc loc = new Loc(pair.x, pair.y);
-				simFlip(loc);
+			for (Loc loc : outpostList.get(id)) {
 				cells[loc.x][loc.y].incNumOutposts(id);
 				outposts.get(id).add(loc);
 			}
@@ -224,9 +231,9 @@ public class Board {
 				for (int id = 0; id < Consts.numPlayers; id++) {
 					for (Loc loc : outposts.get(id)) {
 						double d = Loc.mDistance(x, y, loc);
-						if (d < r && d == cell.getOwnerDistance() && id != cell.getOwnerId()) {
+						if (d <= r && d == cell.getOwnerDistance() && id != cell.getOwnerId()) {
 							cell.setDisputed();
-						} else if (d < r && d < cell.getOwnerDistance()) {
+						} else if (d <= r && d < cell.getOwnerDistance()) {
 							cell.setOwned(id, d);
 						}
 					}
@@ -239,6 +246,8 @@ public class Board {
 		for (int x = 0; x < dimension; x++) {
 			for (int y = 0; y < dimension; y++) {
 				Cell cell = cells[x][y];
+				passableGrid[x][y] = false;
+
 				if (cell.isOwned()) {
 					int id = cell.getOwnerId();
 					playerSummaries.get(id).totalCells += 1;
@@ -247,8 +256,93 @@ public class Board {
 					else
 						playerSummaries.get(id).waterCells += 1;
 				}
+				
+				if (cell.isLand() && (!cell.isOwned() || (cell.isOwned() && cell.getOwnerId() == playerId)))
+					passableGrid[x][y] = true;
+			}
+		}		
+	}
+	
+	public void updateFromSim(ArrayList<ArrayList<Pair>> simOutpostList) {
+		if (simOutpostList.size() != Consts.numPlayers)
+			System.err.println("Attempting to update board with wrong size list of player outposts");
+		
+		ArrayList<ArrayList<Loc>> outpostList = new ArrayList<ArrayList<Loc>>();
+		
+		for (int id = 0; id < Consts.numPlayers; id++) {
+			outpostList.add(new ArrayList<Loc>());
+			
+			for (Pair pair : simOutpostList.get(id)) {
+				Loc loc = new Loc(pair.x, pair.y);
+				simFlip(loc);
+				outpostList.get(id).add(loc);
 			}
 		}
+		
+		update(outpostList);
+	}
+	
+	// Returns indexes of outposts that would be disbanded on this board for the given player id
+	public ArrayList<Integer> outpostsToDisband(int id) {
+		ArrayList<Integer> outpostList = new ArrayList<Integer>();
+		
+		Loc home = getHomeCell(id);
+		LinkedList<Loc> queue = new LinkedList<Loc>();
+		boolean[][] visited = new boolean[dimension][dimension];
+		
+		queue.add(home);
+		visited[home.x][home.y] = true;
+		
+		while (!queue.isEmpty()) {
+			Loc loc = queue.poll();
+			ArrayList<Loc> neighbors = getNearbyLocs(loc.x, loc.y, 1);
+			
+			for (Loc neighbor : neighbors) {
+				if (!visited[neighbor.x][neighbor.y] && cells[neighbor.x][neighbor.y].isPassableFor(id)) {
+					queue.add(neighbor);
+					visited[neighbor.x][neighbor.y] = true;
+				}
+			}
+		}
+		
+		for (int i = 0; i < outposts.get(id).size(); i++) {
+			Loc loc = outposts.get(id).get(i);
+			
+			if (!visited[loc.x][loc.y])
+				outpostList.add(new Integer(i));
+		}
+		
+		return outpostList;
+	}
+
+	// Returns locations of outposts of a player id adjacent to a given location
+	public ArrayList<Loc> adjacentOutposts(int id, Loc start) {
+		ArrayList<Loc> outpostList = new ArrayList<Loc>();
+		
+		if (!cells[start.x][start.y].hasOutpost(id))
+			return outpostList;
+		
+		LinkedList<Loc> queue = new LinkedList<Loc>();
+		boolean[][] visited = new boolean[dimension][dimension];
+		
+		queue.add(start);
+		visited[start.x][start.y] = true;
+		outpostList.add(start);
+		
+		while (!queue.isEmpty()) {
+			Loc loc = queue.poll();
+			ArrayList<Loc> neighbors = getNearbyLocs(loc.x, loc.y, 1);
+			
+			for (Loc neighbor : neighbors) {
+				if (!visited[neighbor.x][neighbor.y] && cells[neighbor.x][neighbor.y].hasOutpost(id)) {
+					queue.add(neighbor);
+					visited[neighbor.x][neighbor.y] = true;
+					outpostList.add(loc);
+				}
+			}
+		}
+
+		return outpostList;
 	}
 	
 	public int getTicksRemaining() {
@@ -270,6 +364,22 @@ public class Board {
 			loc = new Loc(dimension - 1, dimension - 1);
 		else if (id == 3)
 			loc = new Loc(0, dimension - 1);
+			
+		simFlip(loc);
+		return loc;
+	}
+	
+	public Loc getHomeKillCell(int id) {
+		Loc loc = null;
+		
+		if (id == 0)
+			loc = new Loc(1, 1);
+		else if (id == 1)
+			loc = new Loc(dimension - 2, 1);
+		else if (id == 2)
+			loc = new Loc(dimension - 2, dimension - 2);
+		else if (id == 3)
+			loc = new Loc(1, dimension - 2);
 			
 		simFlip(loc);
 		return loc;
@@ -351,6 +461,20 @@ public class Board {
 	public ArrayList<Loc> findPath(Loc start, Loc end) {
 		return jps.findPath(start, end);
 	}
+
+	public ArrayList<Loc> findPathUL(int xStart, int yStart, int xEnd, int yEnd) {
+		return findPathUL(new Loc(xStart, yStart), new Loc(xEnd, yEnd));
+	}
+	
+	public ArrayList<Loc> findPathUL(Loc start, Loc end) {
+		JPS jps = new JPS(landGridUL, dimension, dimension);
+		return jps.findPath(start, end);
+	}
+	
+	public ArrayList<Loc> findPathPassable(Loc start, Loc end) {
+		JPS jps = new JPS(passableGrid, dimension, dimension);
+		return jps.findPath(start, end);
+	}
 	
 	public Loc crop(Loc loc) {
 		Loc l = new Loc(loc);
@@ -382,9 +506,22 @@ public class Board {
 		return outposts.get(playerId);
 	}
 
-        public ArrayList<Loc> theirOutposts(int id){
-                return outposts.get(id);
-        }
+	public ArrayList<Loc> theirOutposts(int id) {
+		return outposts.get(id);
+	}
+	
+	public ArrayList<ArrayList<Loc>> allOutposts() {
+		ArrayList<ArrayList<Loc>> allOutposts = new ArrayList<ArrayList<Loc>>();
+		
+		for (int id = 0; id < Consts.numPlayers; id++) {
+			allOutposts.add(new ArrayList<Loc>());
+			
+			for (int j = 0; j < outposts.get(id).size(); j++)
+				allOutposts.get(id).add(new Loc(outposts.get(id).get(j)));
+		}
+		
+		return allOutposts;
+	}
 	
 	public boolean cellHasOutpost(int x, int y) {
 		return cells[x][y].hasOutpost();

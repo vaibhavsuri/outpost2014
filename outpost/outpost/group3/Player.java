@@ -71,7 +71,7 @@ public class Player extends outpost.sim.Player {
     		return;
     	
     	for (Outpost outpost : outposts) {
-    		if (!outpost.isUpdated() && outpostsForStrategy.size() < max) {
+    		if (!outpost.isUpdated() && outpostsForStrategy.size() < max && !outpost.getStrategy().equals("consumer")) {
     			outpostsForStrategy.add(outpost);
     			outpost.setStrategy(strategyName);
 				outpost.setTargetLoc(null);
@@ -99,13 +99,96 @@ public class Player extends outpost.sim.Player {
     		}
     	}
     }
+    
+    // type 0 = stay the same; type 1 = move left; type 2 = move up; type 3 = move up/left whichever is greater; type 4 = move right; type 5 = move down; 
+    private Board getBoardAfterOpponentMove(Board board, int type) {
+    	Board boardAfterOpponentMoves = new Board(board);
+    	
+    	ArrayList<ArrayList<Loc>> allOutposts = boardAfterOpponentMoves.allOutposts();
+    	
+    	for (int opponentId = 0; opponentId < Consts.numPlayers; opponentId++) {
+    		if (opponentId == id)
+    			continue;
+    		
+    		ArrayList<Loc> opponentOutposts = allOutposts.get(opponentId);
+    		
+    		for (int j = 0; j < opponentOutposts.size(); j++) {
+    			Loc loc = opponentOutposts.get(j);
+    			
+    			if (type == 1 || (type == 3 && loc.x > loc.y))
+    				loc.x = Math.max(0, loc.x - 1);
+    			else if (type == 2 || (type == 3 && loc.x <= loc.y))
+    				loc.y = Math.max(0, loc.y - 1);
+    			else if (type == 4)
+    				loc.x = Math.min(size - 1, loc.x + 1);
+    			else if (type == 5)
+    				loc.y = Math.min(size - 1, loc.y + 1);
+    		}
+    	}
+    	
+    	boardAfterOpponentMoves.update(allOutposts);
+    	
+    	return boardAfterOpponentMoves;
+    }
+    
+    private ArrayList<Integer> outpostsToAdjustTactically() {
+    	// First, construct a new board as if we played all our moves
+    	Board boardAfterOurMoves = new Board(board);
+    	
+    	ArrayList<ArrayList<Loc>> allOutposts = boardAfterOurMoves.allOutposts();
+    	
+    	for (Outpost outpost : outposts) {
+			Loc currentLoc = outpost.getCurrentLoc();
+			Loc targetLoc = outpost.getTargetLoc();
+			
+			if (targetLoc == null)
+				targetLoc = new Loc(currentLoc);
+			
+    		ArrayList<Loc> path = board.findPath(currentLoc, targetLoc);
+    		
+    		if (path == null || path.size() == 0 || path.size() == 1) {
+    			Loc loc = allOutposts.get(id).get(outpost.getSimIndex());
+    			loc.x = currentLoc.x;
+    			loc.y = currentLoc.y;
+    		} else {
+    			Loc loc = allOutposts.get(id).get(outpost.getSimIndex());
+    			loc.x = path.get(1).x;
+    			loc.y = path.get(1).y;
+    		}
+    	}
+    	
+    	boardAfterOurMoves.update(allOutposts);
+    	
+    	// Consider six cases of how enemies might move: stay the same, move up, move left, or move whichever is more distant, move down, move right
+    	ArrayList<Integer> disbandedOutposts = new ArrayList<Integer>();	// List of simIds of outposts that will be disbanded.  May contain duplicates, but that will not matter
+    	
+    	for (int i = 0; i < 6; i++) {
+    		Board boardAfterOpponentMove = getBoardAfterOpponentMove(boardAfterOurMoves, i);
+        	disbandedOutposts.addAll(boardAfterOpponentMove.outpostsToDisband(id));
+    	}
+    	
+    	return disbandedOutposts;
+    }
 
 	public void init() {}
 
 	public int delete(ArrayList<ArrayList<Pair>> king_outpostlist, Point[] gridin) {
-		//System.out.printf("haha, we are trying to delete a outpost for player %d\n", this.id);
-		int del = random.nextInt(king_outpostlist.get(id).size());
-		return del;
+		int index = 0;
+		int maxDistance = 0;
+		
+		for (int i = 0; i < king_outpostlist.get(id).size(); i++) {
+			Pair pair = king_outpostlist.get(id).get(i);
+			Loc loc = new Loc(pair.x, pair.y);
+			
+			int distance = board.getCell(loc).getPathDistanceToHome(id);
+			
+			if (distance > maxDistance) {
+				maxDistance = distance;
+				index = i;
+			}
+		}
+		
+		return index;
 	}
 
     public ArrayList<movePair> move(ArrayList<ArrayList<Pair>> simOutpostList, Point[] simGrid, int r, int L, int W, int T) {
@@ -116,10 +199,12 @@ public class Player extends outpost.sim.Player {
     		isInitialized = true;
     	}
     	
+    	long startTime = System.currentTimeMillis();
+    	
     	// For each of our outposts in the list, find and update it in our persistent list, or add it if not
     	for (Outpost outpost : outposts)
     		outpost.setUpdated(false);
-    	
+    	    	
     	for (int i = 0; i < simOutpostList.get(id).size(); i++) {
     		Pair pair = simOutpostList.get(id).get(i);
 			Loc loc = new Loc(pair.x, pair.y);
@@ -150,7 +235,7 @@ public class Player extends outpost.sim.Player {
     	}
     	
     	// Update the board object
-    	board.update(simOutpostList);
+    	board.updateFromSim(simOutpostList);
     	    	
     	// Assign and run strategies on each outpost; use updated to indicate whether a strategy has been run on an outpost
     	for (Outpost outpost : outposts)
@@ -178,25 +263,27 @@ public class Player extends outpost.sim.Player {
     	markStrategyDone(outpostsForStrategy);
     	
     	// Run consumer
-        targetNum = 4;		// Just working with one consumer
+        targetNum = 16;		// Just working with one consumer
         outpostsForStrategy = new ArrayList<Outpost>();
         assignStrategy(outpostsForStrategy, "consumer", targetNum);
-        Strategy ConsumerStrategy = new ConsumerStrategy(r);
+        Strategy ConsumerStrategy = new ConsumerStrategy();
         ConsumerStrategy.run(board, outpostsForStrategy);
         markStrategyDone(outpostsForStrategy);
     	
+        /*
     	// Run attack Enemy strategy
-    	targetNum = 3;		
+    	targetNum = 3;
     	outpostsForStrategy = new ArrayList<Outpost>();
     	assignStrategy(outpostsForStrategy, "attackEnemy", targetNum);
     	Strategy attackEnemy = new AttackEnemy();
     	attackEnemy.run(board, outpostsForStrategy);
     	markStrategyDone(outpostsForStrategy);
-    	
-        // Set any remaining to gatherers
+    	*/
+        
+        // Set any remaining unassigned to gatherers (no stealing)
         targetNum = outposts.size();
        	outpostsForStrategy = new ArrayList<Outpost>();
-    	assignStrategy(outpostsForStrategy, "resourceGatherer", targetNum);
+    	assignStrategyUnassigned(outpostsForStrategy, "resourceGatherer", targetNum);
     	Strategy getResourcesFill = new GetResources();
     	getResourcesFill.run(board, outpostsForStrategy);
     	markStrategyDone(outpostsForStrategy);
@@ -211,17 +298,30 @@ public class Player extends outpost.sim.Player {
     	markStrategyDone(outpostsForStrategy);
     	*/
     	
+    	// Adjust moves to avoid fruitless, suicidal moves
+    	ArrayList<Integer> outpostsToAdjust = outpostsToAdjustTactically();
+    	
     	// Pass back to the simulator where we want our outposts to go
     	ArrayList<movePair> moves = new ArrayList<movePair>();
+    	Loc homeCell = board.getHomeCell(id);
     	
     	for (Outpost outpost : outposts) {
-			Loc currentLoc = outpost.getCurrentLoc();
+			Loc currentLoc = new Loc(outpost.getCurrentLoc());
 			Loc targetLoc = outpost.getTargetLoc();
 			
 			if (targetLoc == null)
 				targetLoc = new Loc(currentLoc);
 			
-    		ArrayList<Loc> path = board.findPath(currentLoc, targetLoc);
+			ArrayList<Loc> path;
+			
+	    	// Tactical adjustment
+    		if (!outpost.memory.containsKey("role") && outpostsToAdjust.contains(new Integer(outpost.getSimIndex()))) {
+    			targetLoc = new Loc(homeCell);
+    			path = board.findPathPassable(currentLoc, targetLoc);
+    		} else {
+    			targetLoc = new Loc(targetLoc);
+        		path = board.findPath(currentLoc, targetLoc);
+    		}
     		
     		if (path == null || path.size() == 0 || path.size() == 1) {
     			outpost.setExpectedLoc(new Loc(currentLoc));
@@ -234,6 +334,8 @@ public class Player extends outpost.sim.Player {
     			moves.add(new movePair(outpost.getSimIndex(), new Pair(expectedLoc.x, expectedLoc.y)));
     		}
     	}
+    	
+    	System.out.printf("[GROUP3][LOG] Elapsed: %d\n", System.currentTimeMillis() - startTime);
     	
     	return moves;
     }
