@@ -68,6 +68,8 @@ public class Player extends outpost.sim.Player {
 	}
 
 	public ArrayList<movePair> move(ArrayList<ArrayList<Pair>> king_outpostlist, Point[] gridin, int r, int L, int W, int T) {
+		ArrayList<movePair> movelist = new ArrayList<movePair>();
+		try{
 		if (!playerInitialized) {
 			for (int i = 0; i < gridin.length; i++) {
 				grid[i] = new Point(gridin[i]);
@@ -141,8 +143,8 @@ public class Player extends outpost.sim.Player {
 		}
 		
 		
-		System.out.println("---- New tick -----\n"+tickCounter);
-		ArrayList<movePair> movelist = new ArrayList<movePair>();
+		System.out.printf("---- New tick %d -----\n", tickCounter);
+
 		
 		//preparation code for the resource strategy
 		next_moves = new ArrayList<Point>();
@@ -203,33 +205,8 @@ public class Player extends outpost.sim.Player {
 				}
 			}
 		}
-
-		ArrayList<Point> enemiesInMySide = new ArrayList<Point>();
-		for (int x = playersLeftTopCorner.get(id).x; x < playersLeftTopCorner.get(id).x + TOO_CLOSE; x++) {
-			for (int y = playersLeftTopCorner.get(id).y; y < playersLeftTopCorner.get(id).y + TOO_CLOSE; y++) {
-				Point p = getGridPoint(x, y);
-				if (pointHasEnemyOutpost(p)) {
-					enemiesInMySide.add(p);
-				}
-			}
-		}
-//		Collections.sort(enemiesInMySide, new Comparator<Point>() {
-//            @Override
-//            public int compare(Point o1, Point o2) {
-//            	int distToMyBase1 = distance(o1 , playersBase.get(id));
-//            	int distToMyBase2 = distance(o2, playersBase.get(id));
-//                int diff = (distToMyBase1 - distToMyBase2);
-//                if (diff > 0) {
-//                	return 1;
-//                } else if (diff == 0) {
-//                	return (o1.x - o2.x) + 100*(o1.y - o2.y);
-//                } else {
-//                	return -1;
-//                }
-//            }
-//        });
 		
-		
+		SortedSet<Point> enemiesCloseToMyBase = getEnemiesCloserThanDist(myBase, TOO_CLOSE);
 		
 		// decide strategy
 		for (int currentOutpostId = myOutposts.size() - 1; currentOutpostId >= 0; currentOutpostId--) {
@@ -243,7 +220,7 @@ public class Player extends outpost.sim.Player {
 				break;
 			}
 			
-			if (currentOutpostId == myOutposts.size() - 1 && enemiesInMySide.size() != 0 && currentOutpostId -2 >= 0) {
+			if (currentOutpostId == myOutposts.size() - 1 && enemiesCloseToMyBase.size() != 0 && currentOutpostId -2 >= 0) {
 				// protect base strategy
 				List<List<Point>> formation1 = Arrays.asList(Arrays.asList(getGridPoint(1, 0), getGridPoint(0, 1)), Arrays.asList(getGridPoint(98, 0), getGridPoint(99, 1)), Arrays.asList(getGridPoint(98, 99), getGridPoint(99, 98)), Arrays.asList(getGridPoint(1, 99), getGridPoint(0, 98)));
 				
@@ -284,18 +261,68 @@ public class Player extends outpost.sim.Player {
 			allDuos.add(new Duo(outpostId1, outpostId2));
 		}
 		
-		SortedSet<Point> enemiesCloseToMyBase = getEnemiesCloserThanDist(myBase, 40);
-		for (Point enemy : enemiesCloseToMyBase) {
-			SortedSet<Duo> duos = getDuosByDistanceToPoint(myBase);
-			if (duos.size() == 0) {
-				break;
+		if (enemiesCloseToMyBase.size() != 0) {
+			for (Point enemy : enemiesCloseToMyBase) {
+				SortedSet<Duo> duos = getDuosByDistanceToPoint(myBase);
+				if (duos.size() == 0) {
+					break;
+				}
+				
+				for (Duo duo : duos) {
+					addDuoToMovelist(movelist, duo, getGridPoint(enemy));
+					break;
+				}
 			}
-			
-			for (Duo duo : duos) {
-				addDuoToMovelist(movelist, duo, getGridPoint(enemy));
-				break;
+		} else {
+			if (allDuos.size() > 5) {
+				SortedSet<Point> enemiesByEnemyBase = getEnemiesCloserThanDist(playersBase.get((this.id + 4 - 1) % 4), 30);
+				List<Point> enemies = new ArrayList<Point>(enemiesByEnemyBase);
+				Collections.sort(enemies, new Comparator<Point>() {
+		            @Override
+		            public int compare(Point o1, Point o2) {
+		            	int distToMyBase1 = distance(o1 , myBase);
+		            	int distToMyBase2 = distance(o2, myBase);
+		                int diff = (distToMyBase1 - distToMyBase2);
+		                if (diff > 0) {
+		                	return 1;
+		                } else if (diff == 0) {
+		                	return (o1.x - o2.x) + 100*(o1.y - o2.y);
+		                } else {
+		                	return -1;
+		                }
+		            }
+		        });
+				
+				if (enemies.size() >= 1) {
+					addDuoToMovelist(movelist, allDuos.get(0), enemies.get(0));
+				}
+				
+				SortedSet<Point> enemiesByEnemyBase1 = getEnemiesCloserThanDist(playersBase.get((this.id + 4 + 1) % 4), 30);
+				List<Point> enemies1 = new ArrayList<Point>(enemiesByEnemyBase1);
+				Collections.sort(enemies1, new Comparator<Point>() {
+		            @Override
+		            public int compare(Point o1, Point o2) {
+		            	int distToMyBase1 = distance(o1 , myBase);
+		            	int distToMyBase2 = distance(o2, myBase);
+		                int diff = (distToMyBase1 - distToMyBase2);
+		                if (diff > 0) {
+		                	return 1;
+		                } else if (diff == 0) {
+		                	return (o1.x - o2.x) + 100*(o1.y - o2.y);
+		                } else {
+		                	return -1;
+		                }
+		            }
+		        });
+				
+				if (enemies1.size() >= 1) {
+					addDuoToMovelist(movelist, allDuos.get(1), enemies1.get(0));
+				}
+
 			}
 		}
+
+		
 		
 		for(Duo duo : allDuos) {
 			if (duosAlreadyWithTarget.contains(duo)) {
@@ -314,7 +341,15 @@ public class Player extends outpost.sim.Player {
 		}
 		
 //		PlayerStatistics.printStats();
-		
+		} catch(Exception E) {
+			E.printStackTrace();
+			try {
+				Thread.sleep(3000);
+			} catch (InterruptedException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
 		return movelist;
 	}
 	
@@ -404,10 +439,9 @@ public class Player extends outpost.sim.Player {
 		Point leaderNextPosition = nextPositionToGetToPositionAvoidOccupied(leader, target);
 		Point followerNextPosition = leader;
 		
-		if (distance(leader, myBase) > distance(target, myBase) && distance(leader, myBase) < 100) {
-			alreadySelectedDuosTargets.remove(target);
-		}
-		
+//		if (distance(leader, myBase) > distance(target, myBase) && distance(leader, myBase) < 100) {
+//			alreadySelectedDuosTargets.remove(target);
+//		}
 		
 		OutpostId previousLeaderTry = new OutpostId(leaderNextPosition, leaderId, id);
 		OutpostId previousFollowerTry = new OutpostId(followerNextPosition, followerId, id);
@@ -439,7 +473,6 @@ public class Player extends outpost.sim.Player {
 				}
 				waitingToMove.add(target);
 				
-				alreadySelectedDuosTargets.remove(target);
 				
 				// try stay in place
 				leaderNextPosition = leader;
@@ -455,6 +488,8 @@ public class Player extends outpost.sim.Player {
 					PlayerStatistics.STAY_IN_PLACE.counter++;
 					break recoverdowhile;
 				}
+				
+				alreadySelectedDuosTargets.remove(target);
 					
 				ArrayList<Point> validNeighbors = neighborPoints(leader);
 				for (Point p: validNeighbors){
