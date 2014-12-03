@@ -58,7 +58,7 @@ public class Player extends outpost.sim.Player {
 	Resource totalResourceNeeded;
 	Resource totalResourceGuaranteed;
 	HashMap<Integer, Point> Targets = new HashMap<Integer, Point>();
-	
+	HashMap<Integer, Integer> target_for_ticks = new HashMap<Integer, Integer>();
 	public Player(int id_in) {super(id_in);}
 
 	public void init() {}
@@ -1157,13 +1157,19 @@ public class Player extends outpost.sim.Player {
 		if (Targets.containsKey(outpostId))
 		{
 			Point check_move = Targets.get(outpostId);
-			if (nextPositionToGetToPositionAvoidEnemy(myOutposts.get(outpostId), check_move) != null)
+			if ((nextPositionToGetToPositionAvoidEnemy(myOutposts.get(outpostId), check_move) != null) && (target_for_ticks.get(outpostId)<100))
 			{
 				chosen_move = check_move;
+				int counter = target_for_ticks.get(outpostId);
+				counter++;
+				target_for_ticks.put(outpostId, counter);
 				storedMove = true;
 			}
 			else
+			{
 				Targets.remove(outpostId);
+				target_for_ticks.remove(outpostId);
+			}
 		}
 		//Point next_first_step = null;
 		//first find if we can move to an exclusive cell with most access to water
@@ -1182,6 +1188,7 @@ public class Player extends outpost.sim.Player {
 				}
 			}
 			Targets.put(outpostId, chosen_move);
+			target_for_ticks.put(outpostId, 0);
 		}
 		
 		next_moves.add(chosen_move);
