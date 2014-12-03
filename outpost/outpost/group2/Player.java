@@ -54,22 +54,22 @@ public class Player extends outpost.sim.Player {
 	    	board.updateSupplyLines(homespaces);
 	    	//printOutposts(outposts, id);
 	    	Resource ourResources = board.getResources(this.id); 
-	    	System.out.printf("[GROUP2][LOG] We have %d water, %d land at start\n", ourResources.water, ourResources.land);
+//	    	System.out.printf("[GROUP2][LOG] We have %d water, %d land at start\n", ourResources.water, ourResources.land);
 	    	int waterMultiplier = calculateResourceMultiplier(outposts.get(id).size(), W, ourResources.water);
-	    	System.out.println("[GROUP2][LOG] Water multiplier: " + waterMultiplier);
+//	    	System.out.println("[GROUP2][LOG] Water multiplier: " + waterMultiplier);
 	    	int landMultiplier = calculateResourceMultiplier(outposts.get(id).size(), L, ourResources.land);
 	    	if (endGame) {
 	    		landMultiplier += 1;
 	    		landMultiplier *= 5;
 	    	}
-	    	System.out.println("[GROUP2][LOG] Land multiplier: " + landMultiplier);
+//	    	System.out.println("[GROUP2][LOG] Land multiplier: " + landMultiplier);
 	    	ArrayList<Pair> pairsToCheck = new ArrayList<Pair>();
 	    	for (Pair outpost : outpostPairs.get(id)) {
 	    		pairsToCheck.addAll(surroundingPairs(outpost, board));
 	    	}
 	    	board.calculateResourceValues(pairsToCheck, this.id, influenceDist, waterMultiplier, landMultiplier);
     	} catch (OwnersNotUpdatedException e) {
-    		System.err.println("[GROUP2][ERROR] Must update the owners before calling this function");
+//    		System.err.println("[GROUP2][ERROR] Must update the owners before calling this function");
     	}
  
     	// Great, now we know the resource value of each cell. Let's now look at each outpost, and see
@@ -107,7 +107,7 @@ public class Player extends outpost.sim.Player {
     		ourNextMoves.add(thisMove);
     	}
     	long endTime = System.currentTimeMillis();
-    	System.out.println("[GROUP2][LOG] Took " + (endTime - startTime) + "milliseconds");
+//    	System.out.println("[GROUP2][LOG] Took " + (endTime - startTime) + "milliseconds");
     	return ourNextMoves;
 	}
 	

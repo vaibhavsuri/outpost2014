@@ -90,9 +90,9 @@ public class Player extends outpost.sim.Player {
             mx[i] *= sx;
             my[i] *= sy;
         }
-        System.out.printf("[Group6][INIT] sx=%d, sy=%d\n", sx, sy);
-        System.out.printf("[Group6][INIT] mx=[%d, %d, %d]\n", mx[0], mx[1], mx[2]);
-        System.out.printf("[Group6][INIT] my=[%d, %d, %d]\n", my[0], my[1], my[2]);
+//        System.out.printf("[Group6][INIT] sx=%d, sy=%d\n", sx, sy);
+//        System.out.printf("[Group6][INIT] mx=[%d, %d, %d]\n", mx[0], mx[1], mx[2]);
+//        System.out.printf("[Group6][INIT] my=[%d, %d, %d]\n", my[0], my[1], my[2]);
 
     }
     
@@ -132,7 +132,7 @@ public class Player extends outpost.sim.Player {
     }
     
     public int delete(ArrayList<ArrayList<Pair>> king_outpostlist, Point[] gridin) {
-        System.out.printf("haha, we are trying to delete a outpost for player %d\n", this.id);
+//        System.out.printf("haha, we are trying to delete a outpost for player %d\n", this.id);
         int del = king_outpostlist.get(my_id).size() - 1;
         ourPosts.remove(ourPosts.size() - 1);
         return del;
@@ -140,7 +140,7 @@ public class Player extends outpost.sim.Player {
 
     public Pair findNextMovePos(Pair current, Pair target)
     {
-        System.out.printf("[Group6][LOG] Finding path (%d, %d) -> (%d, %d)\n", current.x, current.y, target.x, target.y);
+//        System.out.printf("[Group6][LOG] Finding path (%d, %d) -> (%d, %d)\n", current.x, current.y, target.x, target.y);
         for (int i = 0; i < size; ++i)
         {
             for (int j = 0; j < size; ++j)
@@ -166,7 +166,7 @@ public class Player extends outpost.sim.Player {
                 if (x < 0 || x >= size || y < 0 || y >= size || vst[x][y]) continue;
                 if (x == current.x && y == current.y)
                 {
-                    System.out.printf("[Group6][LOG] Path Found\n");
+//                    System.out.printf("[Group6][LOG] Path Found\n");
                     return new Pair(p);
                 }
                 Pair pr = new Pair(x, y);
@@ -193,7 +193,7 @@ public class Player extends outpost.sim.Player {
         //     }
         // }
 
-        System.out.printf("[Group6][LOG] Path Found\n");
+//        System.out.printf("[Group6][LOG] Path Found\n");
         return new Pair(current);
 
     }
@@ -250,7 +250,7 @@ public class Player extends outpost.sim.Player {
         for (Post post : ourPosts) {
             Pair next = findNextMovePos(post.current, post.target);
 
-            System.out.println("[GROUP 6][LOG] " + post + " Next: " + next.x + "," + next.y);
+//            System.out.println("[GROUP 6][LOG] " + post + " Next: " + next.x + "," + next.y);
             
             nextlist.add(new movePair(post.id, next));
         }

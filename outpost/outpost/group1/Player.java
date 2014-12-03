@@ -15,7 +15,7 @@ public class Player extends outpost.sim.Player {
     }
     
     public void init() {
-        System.out.format("group1 has id %d\n", id);
+//        System.out.format("group1 has id %d\n", id);
     }
 
     public static final boolean PRINT_MOVES = false;
@@ -36,7 +36,7 @@ public class Player extends outpost.sim.Player {
             Move m = o.getMove(game);
             moves.add(m.toMovePair(o.getMoveId()));
             if (PRINT_MOVES) {
-                System.out.format("%s moves %s\n", o, m);
+//                System.out.format("%s moves %s\n", o, m);
             }
 
             game.updateOutpost(o, m);
@@ -56,11 +56,11 @@ public class Player extends outpost.sim.Player {
 
     public void printSummary(Game game) {
         int water = game.getMe().waterControlled(game);
-        System.out.format("[LOG][GROUP1] turn %d - water: \033[1;34m%d\033[0m land: \033[1;32m%d\033[0m outposts: \033[1;36m%d\033[0m cansupport: \033[1m%d\033[0m\n", 
-                game.turn,
-                water,
-                game.getMe().landControlled(game), 
-                game.getMyOutposts().size(),
-                game.getMe().unitsSupported(game));
+//        System.out.format("[LOG][GROUP1] turn %d - water: \033[1;34m%d\033[0m land: \033[1;32m%d\033[0m outposts: \033[1;36m%d\033[0m cansupport: \033[1m%d\033[0m\n", 
+//                game.turn,
+//                water,
+//                game.getMe().landControlled(game), 
+//                game.getMyOutposts().size(),
+//                game.getMe().unitsSupported(game));
     }
 }
