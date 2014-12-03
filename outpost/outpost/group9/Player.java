@@ -261,68 +261,17 @@ public class Player extends outpost.sim.Player {
 			allDuos.add(new Duo(outpostId1, outpostId2));
 		}
 		
-		if (enemiesCloseToMyBase.size() != 0) {
-			for (Point enemy : enemiesCloseToMyBase) {
-				SortedSet<Duo> duos = getDuosByDistanceToPoint(myBase);
-				if (duos.size() == 0) {
-					break;
-				}
-				
-				for (Duo duo : duos) {
-					addDuoToMovelist(movelist, duo, getGridPoint(enemy));
-					break;
-				}
+		for (Point enemy : enemiesCloseToMyBase) {
+			SortedSet<Duo> duos = getDuosByDistanceToPoint(myBase);
+			if (duos.size() == 0) {
+				break;
 			}
-		} else {
-			if (allDuos.size() > 5) {
-				SortedSet<Point> enemiesByEnemyBase = getEnemiesCloserThanDist(playersBase.get((this.id + 4 - 1) % 4), 30);
-				List<Point> enemies = new ArrayList<Point>(enemiesByEnemyBase);
-				Collections.sort(enemies, new Comparator<Point>() {
-		            @Override
-		            public int compare(Point o1, Point o2) {
-		            	int distToMyBase1 = distance(o1 , myBase);
-		            	int distToMyBase2 = distance(o2, myBase);
-		                int diff = (distToMyBase1 - distToMyBase2);
-		                if (diff > 0) {
-		                	return 1;
-		                } else if (diff == 0) {
-		                	return (o1.x - o2.x) + 100*(o1.y - o2.y);
-		                } else {
-		                	return -1;
-		                }
-		            }
-		        });
-				
-				if (enemies.size() >= 1) {
-					addDuoToMovelist(movelist, allDuos.get(0), enemies.get(0));
-				}
-				
-				SortedSet<Point> enemiesByEnemyBase1 = getEnemiesCloserThanDist(playersBase.get((this.id + 4 + 1) % 4), 30);
-				List<Point> enemies1 = new ArrayList<Point>(enemiesByEnemyBase1);
-				Collections.sort(enemies1, new Comparator<Point>() {
-		            @Override
-		            public int compare(Point o1, Point o2) {
-		            	int distToMyBase1 = distance(o1 , myBase);
-		            	int distToMyBase2 = distance(o2, myBase);
-		                int diff = (distToMyBase1 - distToMyBase2);
-		                if (diff > 0) {
-		                	return 1;
-		                } else if (diff == 0) {
-		                	return (o1.x - o2.x) + 100*(o1.y - o2.y);
-		                } else {
-		                	return -1;
-		                }
-		            }
-		        });
-				
-				if (enemies1.size() >= 1) {
-					addDuoToMovelist(movelist, allDuos.get(1), enemies1.get(0));
-				}
-
+			
+			for (Duo duo : duos) {
+				addDuoToMovelist(movelist, duo, getGridPoint(enemy));
+				break;
 			}
 		}
-
-		
 		
 		for(Duo duo : allDuos) {
 			if (duosAlreadyWithTarget.contains(duo)) {
