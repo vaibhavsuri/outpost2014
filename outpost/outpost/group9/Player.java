@@ -422,25 +422,40 @@ public class Player extends outpost.sim.Player {
 				}
 				waitingToMove.add(target);
 				
-				
-				// try stay in place
-				leaderNextPosition = leader;
-				followerNextPosition = follower;
-				undoFieldOwnership(previousLeaderTry);
-				undoFieldOwnership(previousFollowerTry);
-				previousLeaderTry = new OutpostId(leaderNextPosition, leaderId, id);
-				previousFollowerTry = new OutpostId(followerNextPosition, followerId, id);
-				updateFieldOwnership(previousLeaderTry);
-				updateFieldOwnership(previousFollowerTry);
-				if (!hasWeakSupplyLine(leaderNextPosition, id)) {
-//					System.out.printf("Success by staying in place\n");
-					PlayerStatistics.STAY_IN_PLACE.counter++;
-					break recoverdowhile;
+				boolean hasNeighbor = false;
+				ArrayList<Point> validNeighbors = neighborPoints(follower);
+				for (Point p: validNeighbors){
+					if (p.water) {
+						continue;
+					}
+
+					if (pointHasEnemyOutpost(p)) {
+						hasNeighbor = true;
+						break;
+					}
 				}
+				
+				if (hasNeighbor) {
+					// try stay in place
+					leaderNextPosition = leader;
+					followerNextPosition = follower;
+					undoFieldOwnership(previousLeaderTry);
+					undoFieldOwnership(previousFollowerTry);
+					previousLeaderTry = new OutpostId(leaderNextPosition, leaderId, id);
+					previousFollowerTry = new OutpostId(followerNextPosition, followerId, id);
+					updateFieldOwnership(previousLeaderTry);
+					updateFieldOwnership(previousFollowerTry);
+					if (!hasWeakSupplyLine(leaderNextPosition, id)) {
+//						System.out.printf("Success by staying in place\n");
+						PlayerStatistics.STAY_IN_PLACE.counter++;
+						break recoverdowhile;
+					}
+				}
+
 				
 				alreadySelectedDuosTargets.remove(target);
 					
-				ArrayList<Point> validNeighbors = neighborPoints(leader);
+				validNeighbors = neighborPoints(leader);
 				for (Point p: validNeighbors){
 					if (p.water) {
 						continue;
