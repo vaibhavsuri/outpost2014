@@ -9,7 +9,7 @@ import outpost.sim.movePair;
 
 public class Player extends outpost.sim.Player {
 	final static int SIDE_SIZE = 100;
-	final static int TOO_CLOSE = 30;
+	final static int TOO_CLOSE = 37;
 
 	boolean playerInitialized;
 	int RADIUS;
